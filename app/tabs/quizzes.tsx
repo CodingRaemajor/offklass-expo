@@ -1,6 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Colors } from "../../lib/colors";
+import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
+
+/* ----------------------------- Quiz Data (same) ---------------------------- */
 
 type QuizQuestion = {
   id: number;
@@ -23,12 +26,139 @@ const quizQuestions: QuizQuestion[] = [
   { id: 10, question: "If you roll a standard six-sided die, what is the probability of rolling an even number?", options: ["1/6", "1/3", "1/2", "2/3"], correctAnswer: "1/2", topic: "Probability" },
 ];
 
+/* ------------------------------- Lightweight i18n ------------------------------- */
+
+const LANGS = ["English", "नेपाली", "اردو", "বাংলা", "हिन्दी"] as const;
+type Lang = (typeof LANGS)[number];
+
+const L10N: Record<
+  Lang,
+  {
+    title: string;
+    subtitle: string;
+    questionOf: (a: number, b: number) => string;
+    topic: string;
+    submit: string;
+    next: string;
+    correct: string;
+    incorrect: string;
+    doneTitle: string;
+    doneScore: (s: number, t: number) => string;
+    playAgain: string;
+    score: string;
+    current: string;
+    total: string;
+    progressSuffix: string;
+  }
+> = {
+  English: {
+    title: "🎯 Quiz Challenge!",
+    subtitle: "Test your knowledge and earn points!",
+    questionOf: (a, b) => `Question ${a} of ${b}`,
+    topic: "Topic",
+    submit: "Submit Answer",
+    next: "Next Question ▶",
+    correct: "✅ Correct!",
+    incorrect: "❌ Incorrect.",
+    doneTitle: "Quiz Completed!",
+    doneScore: (s, t) => `You scored ${s} out of ${t}!`,
+    playAgain: "⟳ Play Again",
+    score: "Score",
+    current: "Current",
+    total: "Total",
+    progressSuffix: "%",
+  },
+  नेपाली: {
+    title: "🎯 क्विज चुनौती!",
+    subtitle: "आफ्नो ज्ञान परीक्षण गर्नुहोस् र अंक कमाउनुहोस्!",
+    questionOf: (a, b) => `प्रश्न ${a} / ${b}`,
+    topic: "विषय",
+    submit: "उत्तर पठाउनुहोस्",
+    next: "अर्को प्रश्न ▶",
+    correct: "✅ सहि!",
+    incorrect: "❌ गलत।",
+    doneTitle: "क्विज समाप्त!",
+    doneScore: (s, t) => `तपाईंले ${t} मध्ये ${s} अंक प्राप्त गर्नुभयो!`,
+    playAgain: "⟳ फेरि खेल्नुहोस्",
+    score: "अंक",
+    current: "हालको",
+    total: "जम्मा",
+    progressSuffix: "%",
+  },
+  اردو: {
+    title: "🎯 کوئز چیلنج!",
+    subtitle: "اپنا علم آزمائیں اور پوائنٹس حاصل کریں!",
+    questionOf: (a, b) => `سوال ${a} از ${b}`,
+    topic: "موضوع",
+    submit: "جواب جمع کریں",
+    next: "اگلا سوال ▶",
+    correct: "✅ درست!",
+    incorrect: "❌ غلط۔",
+    doneTitle: "کوئز مکمل!",
+    doneScore: (s, t) => `آپ نے ${t} میں سے ${s} اسکور کیا!`,
+    playAgain: "⟳ دوبارہ کھیلیں",
+    score: "اسکور",
+    current: "موجودہ",
+    total: "کل",
+    progressSuffix: "%",
+  },
+  বাংলা: {
+    title: "🎯 কুইজ চ্যালেঞ্জ!",
+    subtitle: "জ্ঞান যাচাই করুন এবং পয়েন্ট অর্জন করুন!",
+    questionOf: (a, b) => `প্রশ্ন ${a} / ${b}`,
+    topic: "বিষয়",
+    submit: "উত্তর জমা দিন",
+    next: "পরবর্তী প্রশ্ন ▶",
+    correct: "✅ সঠিক!",
+    incorrect: "❌ ভুল।",
+    doneTitle: "কুইজ সম্পন্ন!",
+    doneScore: (s, t) => `আপনি ${t} এর মধ্যে ${s} পেয়েছেন!`,
+    playAgain: "⟳ আবার খেলুন",
+    score: "স্কোর",
+    current: "বর্তমান",
+    total: "মোট",
+    progressSuffix: "%",
+  },
+  हिन्दी: {
+    title: "🎯 क्विज़ चैलेंज!",
+    subtitle: "अपना ज्ञान जाँचें और पॉइंट्स कमाएँ!",
+    questionOf: (a, b) => `प्रश्न ${a} / ${b}`,
+    topic: "विषय",
+    submit: "उत्तर भेजें",
+    next: "अगला प्रश्न ▶",
+    correct: "✅ सही!",
+    incorrect: "❌ गलत।",
+    doneTitle: "क्विज़ पूरा!",
+    doneScore: (s, t) => `आपने ${t} में से ${s} स्कोर किया!`,
+    playAgain: "⟳ फिर से खेलें",
+    score: "स्कोर",
+    current: "वर्तमान",
+    total: "कुल",
+    progressSuffix: "%",
+  },
+};
+
 export default function Quizzes() {
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
+
+  // language (loaded from onboarding)
+  const [lang, setLang] = useState<Lang>("English");
+
+  useEffect(() => {
+    (async () => {
+      const saved = await loadJSON<OnboardingData | null>(ONBOARD_KEY, null);
+      const l = (saved?.language as Lang) || "English";
+      setLang(LANGS.includes(l) ? l : "English");
+    })();
+  }, []);
+
+  const T = useMemo(() => L10N[lang], [lang]);
+  const isRTL = lang === "اردو";
+  const rtl = isRTL ? { writingDirection: "rtl" as "rtl", textAlign: "right" as const } : undefined;
 
   const q = quizQuestions[current];
 
@@ -70,21 +200,19 @@ export default function Quizzes() {
     <View style={s.container}>
       {/* Header */}
       <View style={{ alignItems: "center", marginBottom: 12 }}>
-        <Text style={s.h1}>🎯 Quiz Challenge!</Text>
-        <Text style={s.sub}>Test your knowledge and earn points!</Text>
+        <Text style={[s.h1, rtl]}>{T.title}</Text>
+        <Text style={[s.sub, rtl]}>{T.subtitle}</Text>
       </View>
 
       {!done ? (
         <View style={s.card}>
           <View style={s.cardHeader}>
-            <Text style={s.cardTitle}>
-              Question {current + 1} of {quizQuestions.length}
-            </Text>
-            <Text style={s.topic}>Topic: {q.topic}</Text>
+            <Text style={[s.cardTitle, rtl]}>{T.questionOf(current + 1, quizQuestions.length)}</Text>
+            <Text style={[s.topic, rtl]}>{T.topic}: {q.topic}</Text>
           </View>
 
           <View style={{ padding: 16 }}>
-            <Text style={s.question}>{q.question}</Text>
+            <Text style={[s.question, rtl]}>{q.question}</Text>
 
             <View style={{ gap: 10, marginTop: 14 }}>
               {q.options.map((opt) => {
@@ -124,7 +252,7 @@ export default function Quizzes() {
                     onPress={() => selectOption(opt)}
                     style={[s.option, { backgroundColor: bg, borderColor: border }]}
                   >
-                    <Text style={[s.optionTxt, { color: txt }]}>{opt}</Text>
+                    <Text style={[s.optionTxt, { color: txt }, rtl]}>{opt}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -137,16 +265,16 @@ export default function Quizzes() {
                   disabled={selected == null}
                   style={[s.btn, s.btnSubmit, selected == null && s.disabled]}
                 >
-                  <Text style={s.btnTxt}>Submit Answer</Text>
+                  <Text style={s.btnTxt}>{T.submit}</Text>
                 </TouchableOpacity>
               ) : (
                 <>
                   <TouchableOpacity onPress={next} style={[s.btn, s.btnNext]}>
-                    <Text style={s.btnTxt}>Next Question ▶</Text>
+                    <Text style={s.btnTxt}>{T.next}</Text>
                   </TouchableOpacity>
 
-                  <Text style={s.feedback}>
-                    {selected === q.correctAnswer ? "✅ Correct!" : "❌ Incorrect."}
+                  <Text style={[s.feedback, rtl]}>
+                    {selected === q.correctAnswer ? T.correct : T.incorrect}
                   </Text>
                 </>
               )}
@@ -155,13 +283,12 @@ export default function Quizzes() {
         </View>
       ) : (
         <View style={[s.card, s.center]}>
-          <Text style={s.doneTitle}>Quiz Completed!</Text>
-          <Text style={s.doneScore}>
-            You scored <Text style={{ color: "#34D399", fontWeight: "900" }}>{score}</Text> out of{" "}
-            <Text style={{ fontWeight: "900" }}>{quizQuestions.length}</Text>!
+          <Text style={[s.doneTitle, rtl]}>{T.doneTitle}</Text>
+          <Text style={[s.doneScore, rtl]}>
+            {T.doneScore(score, quizQuestions.length)}
           </Text>
           <TouchableOpacity onPress={restart} style={[s.btn, s.btnReplay]}>
-            <Text style={s.btnTxt}>⟳ Play Again</Text>
+            <Text style={s.btnTxt}>{T.playAgain}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -171,25 +298,29 @@ export default function Quizzes() {
         <View style={s.statsRow}>
           <View style={s.stat}>
             <Text style={s.statNum}>{score}</Text>
-            <Text style={s.statLbl}>Score</Text>
+            <Text style={[s.statLbl, rtl]}>{T.score}</Text>
           </View>
           <View style={s.stat}>
             <Text style={s.statNum}>{current + (done ? 0 : 1)}</Text>
-            <Text style={s.statLbl}>Current</Text>
+            <Text style={[s.statLbl, rtl]}>{T.current}</Text>
           </View>
           <View style={s.stat}>
             <Text style={s.statNum}>{quizQuestions.length}</Text>
-            <Text style={s.statLbl}>Total</Text>
+            <Text style={[s.statLbl, rtl]}>{T.total}</Text>
           </View>
         </View>
         <View style={s.progressOuter}>
           <View style={[s.progressInner, { width: `${progressPct}%` }]} />
         </View>
-        <Text style={s.progressText}>{progressPct}%</Text>
+        <Text style={[s.progressText, rtl]}>
+          {progressPct}{T.progressSuffix}
+        </Text>
       </View>
     </View>
   );
 }
+
+/* ---------------------------------- Styles --------------------------------- */
 
 const s = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: "#0B1220" },

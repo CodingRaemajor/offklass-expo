@@ -1,5 +1,5 @@
 // app/(tabs)/ai.tsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -14,9 +14,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../../lib/colors";
 import ChatBubble from "../../components/ChatBubble";
 import { callAI, type Message } from "../../lib/ai.local";
-import { loadJSON, saveJSON } from "../../lib/storage";
+import { loadJSON, saveJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
 
-// ---- Error Boundary ----
+/* ------------------------------- Error Boundary ------------------------------ */
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err?: any }> {
   constructor(props: any) { super(props); this.state = {}; }
   static getDerivedStateFromError(err: any) { return { err }; }
@@ -36,27 +36,98 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
   }
 }
 
+/* ---------------------------------- i18n ---------------------------------- */
+const LANGS = ["English", "नेपाली", "اردو", "বাংলা", "हिन्दी"] as const;
+type Lang = (typeof LANGS)[number];
+
+const L10N: Record<
+  Lang,
+  {
+    title: string;
+    subtitle: string;
+    placeholder: string;
+    greeting: string;
+    aiBusy: string;
+    fallback: string;
+  }
+> = {
+  English: {
+    title: "Offklass AI",
+    subtitle: "Ask questions. Get friendly help.",
+    placeholder: "Type your question…",
+    greeting: "Hi! I’m Offklass AI. Tell me your grade and what you’d like to learn today 🤗",
+    aiBusy: "⚠️ AI is busy. Try again!",
+    fallback: "I couldn’t think of an answer 😅",
+  },
+  नेपाली: {
+    title: "अफक्लास एआई",
+    subtitle: "प्रश्न सोध्नुहोस्। सजिलै सहयोग पाउनुहोस्।",
+    placeholder: "आफ्नो प्रश्न टाइप गर्नुहोस्…",
+    greeting: "नमस्ते! म Offklass AI हुँ। आफ्नो कक्षा र आज के सिक्न चाहनुहुन्छ भन्नुहोस् 🤗",
+    aiBusy: "⚠️ एआई व्यस्त छ। फेरि प्रयास गर्नुहोस्!",
+    fallback: "म जवाफ सोच्न सकिनँ 😅",
+  },
+  اردو: {
+    title: "آف کلاس اے آئی",
+    subtitle: "سوال پوچھیں۔ دوستانہ مدد پائیں۔",
+    placeholder: "اپنا سوال لکھیں…",
+    greeting: "سلام! میں Offklass AI ہوں۔ اپنی جماعت اور آج کیا سیکھنا چاہتے ہیں بتائیں 🤗",
+    aiBusy: "⚠️ اے آئی مصروف ہے۔ دوبارہ کوشش کریں!",
+    fallback: "میں جواب سوچ نہیں سکا 😅",
+  },
+  বাংলা: {
+    title: "অফক্লাস এআই",
+    subtitle: "প্রশ্ন করুন। বন্ধুসুলভ সহায়তা পান।",
+    placeholder: "আপনার প্রশ্ন লিখুন…",
+    greeting: "হাই! আমি Offklass AI। আপনার ক্লাস ও আজ কী শিখতে চান বলুন 🤗",
+    aiBusy: "⚠️ এআই ব্যস্ত। আবার চেষ্টা করুন!",
+    fallback: "আমি কোনো উত্তর ভাবতে পারিনি 😅",
+  },
+  हिन्दी: {
+    title: "ऑफक्लास एआई",
+    subtitle: "प्रश्न पूछें। दोस्ताना मदद पाएँ।",
+    placeholder: "अपना प्रश्न लिखें…",
+    greeting: "हाय! मैं Offklass AI हूँ। अपनी कक्षा और आज क्या सीखना चाहते हैं बताइए 🤗",
+    aiBusy: "⚠️ एआई व्यस्त है। फिर से प्रयास करें!",
+    fallback: "मैं उत्तर नहीं सोच पाया 😅",
+  },
+};
+
 const STORE_KEY = "chat:offklass";
 
+/* -------------------------------- Component -------------------------------- */
 export default function OffklassAI() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const listRef = useRef<FlatList<Message>>(null);
 
-  // Load history
+  // language
+  const [lang, setLang] = useState<Lang>("English");
+  const T = useMemo(() => L10N[lang], [lang]);
+  const isRTL = lang === "اردو";
+  const rtl = isRTL ? ({ writingDirection: "rtl" as "rtl", textAlign: "right" as const }) : undefined;
+
+  // Load language first, then history (so greeting localizes)
   useEffect(() => {
     (async () => {
+      const ob = await loadJSON<OnboardingData | null>(ONBOARD_KEY, null);
+      const savedLang = (ob?.language as Lang) || "English";
+      const finalLang = LANGS.includes(savedLang) ? savedLang : "English";
+      setLang(finalLang);
+
       const defaults: Message[] = [
-        { id: "greet1", role: "assistant", content: "Hi! I’m Offklass AI. Tell me your grade and what you’d like to learn today 🤗" },
+        { id: "greet1", role: "assistant", content: (L10N[finalLang] ?? L10N.English).greeting },
       ];
       const saved = await loadJSON<unknown>(STORE_KEY, defaults);
       const arr = Array.isArray(saved) ? (saved as any[]) : defaults;
-      const clean: Message[] = arr.map((m) => ({
-        id: String(m?.id ?? Date.now()),
-        role: m?.role === "user" || m?.role === "assistant" ? m.role : "assistant",
-        content: typeof m?.content === "string" ? m.content : JSON.stringify(m?.content ?? ""),
-      })).slice(-100);
+      const clean: Message[] = arr
+        .map((m) => ({
+          id: String(m?.id ?? Date.now()),
+          role: m?.role === "user" || m?.role === "assistant" ? m.role : "assistant",
+          content: typeof m?.content === "string" ? m.content : JSON.stringify(m?.content ?? ""),
+        }))
+        .slice(-100);
       setMessages(clean);
     })();
   }, []);
@@ -90,7 +161,9 @@ export default function OffklassAI() {
             ? {
                 ...msg,
                 id: String(Date.now()), // replace typing bubble
-                content: reply?.content ?? "I couldn’t think of an answer 😅",
+                content: typeof reply?.content === "string" && reply.content.trim()
+                  ? reply.content
+                  : T.fallback,
               }
             : msg
         )
@@ -102,7 +175,7 @@ export default function OffklassAI() {
       setMessages((m) =>
         m.map((msg) =>
           msg.id.endsWith("-typing")
-            ? { ...msg, id: Date.now() + "-err", content: "⚠️ AI is busy. Try again!" }
+            ? { ...msg, id: Date.now() + "-err", content: T.aiBusy }
             : msg
         )
       );
@@ -120,8 +193,8 @@ export default function OffklassAI() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Offklass AI</Text>
-          <Text style={styles.subtitle}>Ask questions. Get friendly help.</Text>
+          <Text style={[styles.title, rtl]}>{T.title}</Text>
+          <Text style={[styles.subtitle, rtl]}>{T.subtitle}</Text>
         </View>
 
         {/* Chat */}
@@ -145,8 +218,8 @@ export default function OffklassAI() {
         {/* Input */}
         <View style={styles.inputBar}>
           <TextInput
-            style={styles.input}
-            placeholder="Type your question…"
+            style={[styles.input, rtl]}
+            placeholder={T.placeholder}
             placeholderTextColor="#9CA3AF"
             value={input}
             onChangeText={setInput}
