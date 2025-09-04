@@ -15,7 +15,7 @@ export default function Home() {
       <LinearGradient colors={[Colors.purple, Colors.purpleDark]} style={styles.welcome}>
         <View style={styles.avatar}><Text style={{ color: "white", fontWeight: "800" }}>{(user?.name?.[0] ?? "D").toUpperCase()}</Text></View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.hello}>Hello, {user?.name ?? "Daniel"}!</Text>
+          <Text style={styles.hello}>Hello, {user?.name ?? "Parth"}!</Text>
           <Text style={styles.meta}>{user?.grade ?? "Grade 3"} • {user?.language ?? "English"}</Text>
         </View>
       </LinearGradient>
