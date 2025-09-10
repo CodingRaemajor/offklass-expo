@@ -33,7 +33,7 @@ const L10N = {
       cont: "Continue Learning",
       quiz: "Take Quiz",
       flash: "Flashcards",
-      dl: "Download Content",
+      ai: "Ask AI",
     },
   },
   नेपाली: {
@@ -44,7 +44,12 @@ const L10N = {
     quick: "छिटो कार्यहरू",
     recent: "हालको गतिविधि",
     empty: "अहिलेसम्म कुनै गतिविधि छैन",
-    actions: { cont: "पढाइ जारी राख्नुहोस्", quiz: "क्विज दिनुहोस्", flash: "फ्ल्यासकार्ड", dl: "समग्री डाउनलोड" },
+    actions: {
+      cont: "पढाइ जारी राख्नुहोस्",
+      quiz: "क्विज दिनुहोस्",
+      flash: "फ्ल्यासकार्ड",
+      ai: "एआईसँग सोध्नुहोस्",
+    },
   },
   اردو: {
     hello: (n: string) => `سلام، ${n}!`,
@@ -54,7 +59,12 @@ const L10N = {
     quick: "فوری اقدامات",
     recent: "حالیہ سرگرمی",
     empty: "ابھی کوئی سرگرمی نہیں",
-    actions: { cont: "سیکھنا جاری رکھیں", quiz: "کوئز دیں", flash: "فلیش کارڈز", dl: "مواد ڈاؤنلوڈ کریں" },
+    actions: {
+      cont: "سیکھنا جاری رکھیں",
+      quiz: "کوئز دیں",
+      flash: "فلیش کارڈز",
+      ai: "اے آئی سے پوچھیں",
+    },
   },
   বাংলা: {
     hello: (n: string) => `হ্যালো, ${n}!`,
@@ -64,7 +74,12 @@ const L10N = {
     quick: "দ্রুত কাজ",
     recent: "সাম্প্রতিক কার্যকলাপ",
     empty: "এখনও কোনো কার্যকলাপ নেই",
-    actions: { cont: "শেখা চালিয়ে যান", quiz: "কুইজ দিন", flash: "ফ্ল্যাশকার্ড", dl: "কন্টেন্ট ডাউনলোড" },
+    actions: {
+      cont: "শেখা চালিয়ে যান",
+      quiz: "কুইজ দিন",
+      flash: "ফ্ল্যাশকার্ড",
+      ai: "এআইকে জিজ্ঞাসা করুন",
+    },
   },
   हिन्दी: {
     hello: (n: string) => `नमस्ते, ${n}!`,
@@ -74,7 +89,12 @@ const L10N = {
     quick: "त्वरित कार्य",
     recent: "हाल की गतिविधि",
     empty: "अभी कोई गतिविधि नहीं",
-    actions: { cont: "सीखना जारी रखें", quiz: "क्विज़ दें", flash: "फ्लैशकार्ड", dl: "कंटेंट डाउनलोड" },
+    actions: {
+      cont: "सीखना जारी रखें",
+      quiz: "क्विज़ दें",
+      flash: "फ्लैशकार्ड",
+      ai: "एआई से पूछें",
+    },
   },
 } as const;
 
@@ -149,11 +169,12 @@ export default function Home() {
             scheme="indigo"
             rtl={rtl}
           />
+          {/* NEW — Ask AI */}
           <ActionTile
-            icon="download-outline"
-            label={T.actions.dl}
-            onPress={() => Alert.alert("Download", "Download center is coming soon.")}
-            scheme="teal"
+            icon="sparkles-outline"
+            label={T.actions.ai}
+            onPress={() => router.push("/tabs/ai")}
+            scheme="purple"
             rtl={rtl}
           />
         </View>
@@ -207,14 +228,16 @@ function ActionTile({
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
-  scheme: "blue" | "orange" | "indigo" | "teal";
+  scheme: "blue" | "orange" | "indigo" | "teal" | "purple";
   rtl?: { writingDirection: "rtl"; textAlign: "right" };
 }) {
   const map = {
-    blue: { bg: "#0B1730", border: "#294480", pill: "#1E3A8A", icon: "#CFE4FF" },
+    blue:   { bg: "#0B1730", border: "#294480", pill: "#1E3A8A", icon: "#CFE4FF" },
     orange: { bg: "#2B1406", border: "#8A4C1B", pill: "#7C2D12", icon: "#FFE7D1" },
     indigo: { bg: "#0B1130", border: "#28356E", pill: "#1F2A5A", icon: "#CFD9FF" },
-    teal: { bg: "#0B1F1C", border: "#155E57", pill: "#065F46", icon: "#CFFAFE" },
+    teal:   { bg: "#0B1F1C", border: "#155E57", pill: "#065F46", icon: "#CFFAFE" },
+    // New purple variant for Ask AI
+    purple: { bg: "#120E2B", border: "#4C2AC8", pill: "#3B2A8F", icon: "#E4D9FF" },
   }[scheme];
 
   return (
@@ -254,7 +277,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     rowGap: 12,
-    flexGrow: 1, // <— fills full height on short content screens
+    flexGrow: 1, // fills full height on short content screens
   },
 
   /* Hero */

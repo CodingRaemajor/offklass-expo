@@ -1,8 +1,18 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Image,
+  TouchableOpacity,
+  Linking,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Chip from "../../components/Chip";
 import { Colors } from "../../lib/colors";
 import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
+import { Ionicons } from "@expo/vector-icons";
 
 /* ----------------------------- Subjects & Topics ----------------------------- */
 
@@ -22,7 +32,7 @@ interface VideoLesson {
   title: string;
   description: string;
   youtubeId: string;
-  topic: Topic; // keep internal topic keys in English
+  topic: Topic;
 }
 
 const VIDEO_LESSONS: Record<Subject, VideoLesson[]> = {
@@ -51,16 +61,16 @@ const L10N: Record<
   Lang,
   {
     title: string;
+    subtitle: string;
     subjects: Record<Subject, string>;
     topics: Record<Topic, string>;
     topicLabel: string;
-    markWatched: string;
-    watched: string;
     allTopics: string;
   }
 > = {
   English: {
     title: "Lessons",
+    subtitle: "Watch short videos by topic.",
     subjects: { Math: "Math", English: "English" },
     topics: {
       "All Topics": "All Topics",
@@ -76,12 +86,11 @@ const L10N: Record<
       Phonics: "Phonics",
     },
     topicLabel: "Topic",
-    markWatched: "Mark as Watched",
-    watched: "Watched ✓",
     allTopics: "All Topics",
   },
   नेपाली: {
     title: "पाठहरू",
+    subtitle: "विषय अनुसार छोटा भिडियोहरू।",
     subjects: { Math: "गणित", English: "अंग्रेजी" },
     topics: {
       "All Topics": "सबै विषय",
@@ -97,12 +106,11 @@ const L10N: Record<
       Phonics: "फोनिक्स",
     },
     topicLabel: "विषय",
-    markWatched: "हेरेको चिन्ह लगाउनुहोस्",
-    watched: "हेरियो ✓",
     allTopics: "सबै विषय",
   },
   اردو: {
     title: "اسباق",
+    subtitle: "موضوع کے حساب سے مختصر ویڈیوز۔",
     subjects: { Math: "ریاضی", English: "انگریزی" },
     topics: {
       "All Topics": "تمام موضوعات",
@@ -118,12 +126,11 @@ const L10N: Record<
       Phonics: "صوتیات",
     },
     topicLabel: "موضوع",
-    markWatched: "دیکھی گئی نشان لگائیں",
-    watched: "دیکھ لیا ✓",
     allTopics: "تمام موضوعات",
   },
   বাংলা: {
     title: "পাঠসমূহ",
+    subtitle: "বিষয় অনুযায়ী ছোট ভিডিও।",
     subjects: { Math: "গণিত", English: "ইংরেজি" },
     topics: {
       "All Topics": "সমস্ত বিষয়",
@@ -139,12 +146,11 @@ const L10N: Record<
       Phonics: "ধ্বনিতত্ত্ব",
     },
     topicLabel: "বিষয়",
-    markWatched: "দেখা হয়েছে চিহ্ন দিন",
-    watched: "দেখা হয়েছে ✓",
     allTopics: "সমস্ত বিষয়",
   },
   हिन्दी: {
     title: "पाठ",
+    subtitle: "विषय के अनुसार छोटे वीडियो।",
     subjects: { Math: "गणित", English: "अंग्रेज़ी" },
     topics: {
       "All Topics": "सभी विषय",
@@ -160,8 +166,6 @@ const L10N: Record<
       Phonics: "ध्वन्यात्मक",
     },
     topicLabel: "विषय",
-    markWatched: "देखा हुआ मार्क करें",
-    watched: "देख लिया ✓",
     allTopics: "सभी विषय",
   },
 };
@@ -170,32 +174,45 @@ const L10N: Record<
 
 interface VideoLessonCardProps {
   lesson: VideoLesson;
-  watched: boolean;
-  onMarkWatched: (id: string) => void;
   T: (typeof L10N)[Lang];
   rtl?: { writingDirection: "rtl"; textAlign: "right" };
 }
 
-function VideoLessonCard({ lesson, watched, onMarkWatched, T, rtl }: VideoLessonCardProps) {
-  const playerRef = useRef(null);
+function VideoLessonCard({ lesson, T, rtl }: VideoLessonCardProps) {
+  const thumb = `https://img.youtube.com/vi/${lesson.youtubeId}/hqdefault.jpg`;
 
   return (
-    <View style={[styles.card, watched && styles.cardWatched]}>
-      <View style={styles.videoContainer} />
+    <View style={styles.card}>
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => Linking.openURL(`https://www.youtube.com/watch?v=${lesson.youtubeId}`)}
+        style={styles.thumbWrap}
+      >
+        <Image source={{ uri: thumb }} style={styles.thumb} resizeMode="cover" />
+        {/* gradient overlay via pure view tint */}
+        <View style={styles.thumbShade} />
+        <View style={styles.playFab}>
+          <Ionicons name="play" size={18} color="#FFF" />
+        </View>
+      </TouchableOpacity>
+
       <View style={styles.cardContent}>
-        <Text style={[styles.cardTitle, rtl]}>{lesson.title}</Text>
-        <Text style={[styles.cardDescription, rtl]}>{lesson.description}</Text>
+        <Text style={[styles.cardTitle, rtl]} numberOfLines={2}>
+          {lesson.title}
+        </Text>
+        <Text style={[styles.cardDescription, rtl]} numberOfLines={3}>
+          {lesson.description}
+        </Text>
+
         <View style={styles.cardFooter}>
-          <Text style={[styles.cardTopic, rtl]}>{T.topicLabel}: {T.topics[lesson.topic] ?? lesson.topic}</Text>
-          <TouchableOpacity
-            onPress={() => onMarkWatched(lesson.id)}
-            disabled={watched}
-            style={[styles.button, watched ? styles.buttonDisabled : styles.buttonActive]}
-          >
-            <Text style={[styles.buttonText, watched && styles.buttonTextDisabled, rtl]}>
-              {watched ? T.watched : T.markWatched}
+          <Text style={[styles.cardTopic, rtl]}>
+            {T.topicLabel}:
+          </Text>
+          <View style={styles.topicPill}>
+            <Text style={styles.topicPillText} numberOfLines={1}>
+              {T.topics[lesson.topic] ?? lesson.topic}
             </Text>
-          </TouchableOpacity>
+          </View>
         </View>
       </View>
     </View>
@@ -207,10 +224,8 @@ function VideoLessonCard({ lesson, watched, onMarkWatched, T, rtl }: VideoLesson
 export default function Lessons() {
   const [subject, setSubject] = useState<Subject>("Math");
   const [topic, setTopic] = useState<Topic>(TOPICS["Math"][0]);
-  const [watchedVideos, setWatchedVideos] = useState<string[]>([]);
   const [lang, setLang] = useState<Lang>("English");
 
-  // Load language from onboarding
   useEffect(() => {
     (async () => {
       const saved = await loadJSON<OnboardingData | null>(ONBOARD_KEY, null);
@@ -227,92 +242,147 @@ export default function Lessons() {
     (lesson) => topic === "All Topics" || lesson.topic === topic
   );
 
-  const handleMarkWatched = useCallback(
-    (id: string) => {
-      if (!watchedVideos.includes(id)) setWatchedVideos((prev) => [...prev, id]);
-    },
-    [watchedVideos]
-  );
-
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-      <Text style={[styles.h1, rtl]}>{T.title}</Text>
+    <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ padding: 16, paddingBottom: 28 }}
+        overScrollMode="never"
+      >
+        {/* Header */}
+        <View style={styles.headerCard}>
+          <Text style={[styles.title, rtl]}>{T.title}</Text>
+          <Text style={[styles.subtitle, rtl]}>{T.subtitle}</Text>
+        </View>
 
-      {/* Subject chips */}
-      <View style={styles.subRow}>
-        {SUBJECTS.map((s) => (
-          <View key={s} style={{ flex: 1 }}>
+        {/* Subject chips */}
+        <View style={styles.subRow}>
+          {SUBJECTS.map((s) => (
+            <View key={s} style={{ flex: 1 }}>
+              <Chip
+                label={T.subjects[s]}
+                active={s === subject}
+                onPress={() => {
+                  setSubject(s);
+                  setTopic(TOPICS[s][0]);
+                }}
+                style={{ justifyContent: "center", alignItems: "center" }}
+              />
+            </View>
+          ))}
+        </View>
+
+        {/* Topic chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+        >
+          {TOPICS[subject].map((t) => (
             <Chip
-              label={T.subjects[s]}
-              active={s === subject}
-              onPress={() => {
-                setSubject(s);
-                setTopic(TOPICS[s][0]);
-              }}
-              style={{ justifyContent: "center", alignItems: "center" }}
+              key={t}
+              label={T.topics[t] ?? t}
+              active={t === topic}
+              onPress={() => setTopic(t)}
             />
-          </View>
-        ))}
-      </View>
+          ))}
+        </ScrollView>
 
-      {/* Topic chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-        {TOPICS[subject].map((t) => (
-          <Chip
-            key={t}
-            label={T.topics[t] ?? t}
-            active={t === topic}
-            onPress={() => setTopic(t)}
-          />
-        ))}
+        <View style={{ height: 10 }} />
+
+        {/* Lessons list */}
+        <View style={{ gap: 12 }}>
+          {filteredLessons.map((lesson) => (
+            <VideoLessonCard key={lesson.id} lesson={lesson} T={T} rtl={rtl} />
+          ))}
+        </View>
       </ScrollView>
-
-      <View style={{ height: 12 }} />
-
-      {/* Lessons list */}
-      <View style={{ gap: 10 }}>
-        {filteredLessons.map((lesson) => (
-          <VideoLessonCard
-            key={lesson.id}
-            lesson={lesson}
-            watched={watchedVideos.includes(lesson.id)}
-            onMarkWatched={handleMarkWatched}
-            T={T}
-            rtl={rtl}
-          />
-        ))}
-      </View>
-    </ScrollView>
+    </SafeAreaView>
   );
 }
 
 /* ----------------------------------- Styles ---------------------------------- */
 
+const UI = {
+  bg: "#0B0E14",
+  card: "#0F1421",
+  cardBorder: "#1C2740",
+  text: "#E6EAF2",
+  subtext: "#9AA5B1",
+  pill: "#111827",
+  pillBorder: "#22304A",
+  accent: "#7C3AED",
+};
+
 const styles = StyleSheet.create({
-  h1: { fontSize: 20, fontWeight: "800", color: Colors.text, marginBottom: 12 },
-  subRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
+  root: { flex: 1, backgroundColor: UI.bg },
+  scroll: { flex: 1, backgroundColor: UI.bg },
+
+  headerCard: {
+    backgroundColor: UI.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: UI.cardBorder,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  title: { color: UI.text, fontSize: 18, fontWeight: "800" },
+  subtitle: { color: UI.subtext, marginTop: 2 },
+
+  subRow: { flexDirection: "row", gap: 10, marginVertical: 12 },
 
   card: {
-    backgroundColor: "#000000AA",
-    borderRadius: 20,
+    backgroundColor: UI.card,
+    borderRadius: 16,
     overflow: "hidden",
-    borderWidth: 2,
-    borderColor: "#3B82F6", // blue-600
+    borderWidth: 1.5,
+    borderColor: UI.cardBorder,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
   },
-  cardWatched: { borderColor: "#16A34A" }, // green-600
-  videoContainer: { width: "100%", height: 200, backgroundColor: "#1F2937" }, // gray-900
-  cardContent: { padding: 16 },
-  cardTitle: { fontSize: 18, fontWeight: "bold", color: "white", marginBottom: 8 },
-  cardDescription: { color: "#D1D5DB", fontSize: 14, marginBottom: 12 }, // gray-300
-  cardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  cardTopic: { color: "#9CA3AF", fontSize: 12 }, // gray-400
-  button: { borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 2 },
-  buttonActive: { backgroundColor: "#2563EB", borderColor: "#3B82F6" }, // blue
-  buttonDisabled: { backgroundColor: "#16A34A", borderColor: "#22C55E" }, // green
-  buttonText: { color: "white", fontWeight: "600" },
-  buttonTextDisabled: { color: "#D1FAE5" }, // lighter green
+
+  thumbWrap: { width: "100%", aspectRatio: 16 / 9, position: "relative" },
+  thumb: { width: "100%", height: "100%" },
+  thumbShade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.15)",
+  },
+  playFab: {
+    position: "absolute",
+    right: 12,
+    bottom: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: UI.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#4C2AC8",
+  },
+
+  cardContent: { padding: 14 },
+  cardTitle: { fontSize: 16, fontWeight: "800", color: UI.text, marginBottom: 6 },
+  cardDescription: { color: UI.subtext, fontSize: 13, marginBottom: 10 },
+
+  cardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  cardTopic: { color: UI.subtext, fontSize: 12 },
+
+  topicPill: {
+    backgroundColor: UI.pill,
+    borderColor: UI.pillBorder,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  topicPillText: { color: UI.text, fontSize: 12, fontWeight: "700" },
 });
