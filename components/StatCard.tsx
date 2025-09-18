@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Colors } from "../lib/colors";
+import React from "react";
 
 type Props = { title: string; value: string; };
 export default function StatCard({ title, value }: Props) {

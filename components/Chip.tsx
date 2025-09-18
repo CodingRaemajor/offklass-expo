@@ -1,6 +1,6 @@
 import { Pressable, Text, StyleSheet, ViewStyle } from "react-native";
 import { Colors } from "@/lib/colors";
-
+import React from "react";
 type Props = {
   label: string;
   active?: boolean;

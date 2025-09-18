@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "../lib/colors";
 import { Ionicons } from "@expo/vector-icons";
+import React from "react";
 
 type Difficulty = "Easy" | "Medium" | "Hard";
 export type Lesson = {
