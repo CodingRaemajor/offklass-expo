@@ -1,0 +1,17 @@
+import { create } from "zustand";
+
+type Track = "foundations" | "precalc" | undefined;
+
+type GradeState = {
+  grade: number;           // default Grade 3
+  track: Track;            // only for 10/11
+  setGrade: (g:number)=>void;
+  setTrack: (t:Track)=>void;
+};
+
+export const useGrade = create<GradeState>((set,get)=>({
+  grade: 3,
+  track: undefined,
+  setGrade: (g)=> set({ grade:g, track: (g===10||g===11) ? get().track : undefined }),
+  setTrack: (t)=> set({ track:t }),
+}));

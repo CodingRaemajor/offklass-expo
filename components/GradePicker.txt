@@ -1,0 +1,35 @@
+import React from "react";
+import { View, Text, Pressable, ScrollView } from "react-native";
+import { useGrade } from "@/lib/grade";
+
+const GRADES = [3,4,5,6,7,8,9,10,11] as const;
+
+const Chip: React.FC<{label:string; selected:boolean; onPress:()=>void}> = ({label,selected,onPress}) => (
+  <Pressable onPress={onPress} style={{
+    paddingVertical:8, paddingHorizontal:12, borderRadius:999, marginRight:8,
+    backgroundColor: selected ? "#2563eb" : "#1f2937"
+  }}>
+    <Text style={{ color:"white", fontWeight:"600" }}>{label}</Text>
+  </Pressable>
+);
+
+export default function GradePicker() {
+  const { grade, setGrade, track, setTrack } = useGrade();
+
+  return (
+    <View style={{ paddingHorizontal:16, paddingTop:12 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:10 }}>
+        {GRADES.map(g => (
+          <Chip key={g} label={`G${g}`} selected={g===grade} onPress={()=>setGrade(g)} />
+        ))}
+      </ScrollView>
+      {(grade===10 || grade===11) && (
+        <View style={{ flexDirection:"row", marginBottom:8 }}>
+          <Chip label="Foundations"  selected={track==="foundations"} onPress={()=>setTrack("foundations")} />
+          <Chip label="Pre-Calculus" selected={track==="precalc"}     onPress={()=>setTrack("precalc")} />
+          <Chip label="All"          selected={!track}                 onPress={()=>setTrack(undefined)} />
+        </View>
+      )}
+    </View>
+  );
+}

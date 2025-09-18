@@ -11,7 +11,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: "portrait",
   newArchEnabled: true,
   userInterfaceStyle: "light",
-  icon: "./assets/icon.png",
+  icon: "./assets/adaptive-icon.png",
   splash: {
     image: "./assets/splash-icon.png",
     resizeMode: "contain",
@@ -28,8 +28,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: "com.parthpatel2005.offklassexpo",
     adaptiveIcon: {
-      foregroundImage: "./assets/adaptive-icon.png",
-      backgroundColor: "#ffffff",
+      foregroundImage: "./assets/icon.png",
+      backgroundColor: "#5A52E0",
     },
     edgeToEdgeEnabled: true,
   },

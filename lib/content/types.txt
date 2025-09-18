@@ -1,0 +1,25 @@
+export type ContentType = "fc" | "vid" | "qz";
+
+export interface ContentItem {
+  id: string;           // e.g., g3_u1_fc_place_value
+  type: ContentType;    // fc | vid | qz
+  title: string;
+  durationMin?: number; // for videos/quizzes (optional)
+}
+
+export interface Unit {
+  unitId: string;       // e.g., g3_u1
+  name: string;         // e.g., "Place Value & Rounding"
+  flashcards: ContentItem[];
+  videos: ContentItem[];
+  quizzes: ContentItem[];
+}
+
+export interface GradeContent {
+  grade: number;         // 3..11
+  track?: "foundations" | "precalc"; // only for 10/11
+  units: Unit[];
+}
+
+export const id = (g:number,u:number,t:ContentType,slug:string)=>
+  `g${g}_u${u}_${t}_${slug}`;
