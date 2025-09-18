@@ -11,37 +11,40 @@ It combines **offline video lessons, flashcards, quizzes, and an AI tutor chatbo
 
 ✨ **Why Offklass?**  
 - ✅ **Grades 3–11**: Comprehensive curriculum coverage  
-- 🌍 **Multilingual**: Supports multiple languages for inclusive learning  
-- 📦 **Offline-first**: Access learning materials without internet connectivity  
-- 🧠 **AI Tutor**: Instant help with math, science, and more via offline AI chatbot  
-- 🎥 **Video Lessons**: Preloaded, interactive lessons for visual learning  
-- 📝 **Flashcards & Quizzes**: Reinforce key concepts and track progress  
-- ⚡ **Lightweight & Scalable**: Works on low-end devices and adapts to various contexts  
+- 🌍 **Multilingual**: English, Hindi, Urdu, Nepali, Bangla (with more coming soon)  
+- 📦 **Offline-first**: Videos, flashcards, quizzes, and AI chatbot work without internet  
+- 🧠 **AI Tutor**: Integrated **offline LLM** (Phi-2 via llama.cpp) for instant help  
+- 🎥 **Video Lessons**: Preloaded & interactive for visual learning  
+- 📝 **Flashcards & Quizzes**: Reinforce concepts and track progress  
+- ⚡ **Lightweight & Scalable**: Optimized for **low-end devices & rural access**  
+- 🔄 **Local Sync**: Share updates across devices with **Wi-Fi + Flask server**  
 
 ---
 
 ## 🛠️ Tech Stack  
-- **Mobile App:** React Native (Expo → bare workflow)  
+- **Mobile App:** React Native (Expo → Bare workflow)  
 - **UI Framework:** Tailwind CSS + ShadCN components  
-- **Backend / Sync:** Flask local server (Wi-Fi sync)  
+- **Backend / Sync:** Flask (local server for LAN sync)  
 - **Offline AI:** llama.cpp + Phi-2 (quantized model)  
-- **Storage:** Local JSON, SQLite, AsyncStorage  
-- **Multilingual System:** i18n + JSON-based translations  
+- **Storage:** AsyncStorage + SQLite + local JSON  
+- **Multilingual System:** i18n with JSON-based translations  
 
 ---
 
 ## 📂 Project Structure  
+```
 offklass/
-├── android/ # Android native integration
-├── ios/ # iOS native integration
-├── src/ # React Native codebase
-│ ├── components/ # Flashcards, quizzes, UI
-│ ├── screens/ # App pages
-│ ├── lang/ # Multilingual JSON files
-│ └── assets/ # Videos, icons, static files
-├── models/ # Offline LLM models (phi-2.gguf)
-├── server/ # Local Flask sync server
-└── README.md # Documentation
+├── android/              # Android native integration
+├── ios/                  # iOS native integration
+├── src/                  # React Native codebase
+│   ├── components/       # Flashcards, quizzes, UI
+│   ├── screens/          # Lessons, quizzes, AI tutor
+│   ├── lang/             # Multilingual JSON files
+│   └── assets/           # Videos, icons, static files
+├── models/               # Offline LLM models (phi-2.gguf)
+├── server/               # Local Flask sync server
+└── README.md             # Documentation
+```
 
 ---
 
@@ -51,71 +54,78 @@ offklass/
 ```bash
 git clone https://github.com/CodingRaemajor/Offklass.git
 cd Offklass
-2️⃣ Install dependencies
-bash
-Copy code
+```
+
+### 2️⃣ Install dependencies  
+```bash
 npm install   # or yarn install
-3️⃣ Run the app
-bash
-Copy code
+```
+
+### 3️⃣ Run the app  
+```bash
 npx expo run:android   # for Android
 npx expo run:ios       # for iOS
-4️⃣ Offline AI Setup
-Place the quantized model (e.g., phi-2.Q4_K_M.gguf) inside:
+```
 
-swift
-Copy code
+### 4️⃣ Offline AI Setup  
+Place the quantized model (e.g., `phi-2.Q4_K_M.gguf`) inside:  
+```
 android/app/src/main/assets/models/
-The app will load this model via native llama.cpp integration.
-
-🌍 Supported Languages
-English
-
-Hindi
-
-Urdu
-
-Nepali
-
-Bangla
-
-(…more coming soon)
-
-📊 Roadmap
- Flashcards & Quiz system
-
- Offline video integration
-
- AI Tutor (local LLM)
-
- Multilingual support
-
- Cross-device sync
-
- Extended subject modules (Science, English, Social Studies, etc.)
-
- Teacher/Admin dashboard
-
-🤝 Contributing
-Contributions are welcome!
-
-Fork the repository
-
-Create your feature branch (git checkout -b feature/AmazingFeature)
-
-Commit changes (git commit -m 'Add some AmazingFeature')
-
-Push to branch (git push origin feature/AmazingFeature)
-
-Open a Pull Request
-
-
-👤 Author
-Parth Patel (Enactus @U of R)
-
-⭐ Support
-If you like this project, please star ⭐ the repository and share it with others who can benefit from accessible learning tools.
+```
+The app loads this model via **native llama.cpp integration**.  
 
 ---
 
-⚡ Question: Do you also want me to **add a “For Enactus / Hackathon Pitch” section** at the bottom (like *Impact, Scalability, Why Offklass matters*), so it doubles as both README + pitch material?
+## 🌍 Supported Languages  
+- English  
+- Hindi  
+- Urdu  
+- Nepali  
+- Bangla  
+*(…more coming soon)*  
+
+---
+
+## 📊 Roadmap  
+- ✅ Flashcards & Quiz system  
+- ✅ Offline video integration  
+- ✅ Multilingual system  
+- 🔄 AI Tutor (local LLM)  
+- 🔄 Cross-device sync via Flask server  
+- 🔜 Extended subjects (Science, English, Social Studies, etc.)  
+- 🔜 Teacher/Admin dashboard  
+
+---
+
+## 🤝 Contributing  
+Contributions are welcome!  
+
+1. Fork the repository  
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)  
+3. Commit changes (`git commit -m 'Add some AmazingFeature'`)  
+4. Push to branch (`git push origin feature/AmazingFeature`)  
+5. Open a Pull Request  
+
+---
+
+## 👤 Author  
+**Parth Patel** (Enactus @ University of Regina)  
+
+---
+
+## 🌟 Support  
+If you like this project, please star ⭐ the repository and share it with others who can benefit from accessible learning tools.  
+
+---
+
+## 🎤 For Enactus & Hackathon Pitches  
+
+📌 **Impact**: Offklass brings **accessible, multilingual, and offline-first learning** to underserved students in Grades 3–11, helping bridge the **digital divide**.  
+
+📌 **Scalability**: Built with a **lightweight offline-first architecture**, it works on low-end Android devices and can scale across **schools, NGOs, and rural education systems** globally.  
+
+📌 **Why Offklass Matters**:  
+- Supports **SDG 4: Quality Education**  
+- Enables **equitable access** to modern learning resources  
+- Provides **AI-powered personalized tutoring** without needing internet  
+
