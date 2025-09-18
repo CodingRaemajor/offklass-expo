@@ -118,13 +118,4 @@ If you like this project, please star ⭐ the repository and share it with other
 
 ---
 
-## 🎤 For Enactus & Hackathon Pitches  
-
-📌 **Impact**: Offklass brings **accessible, multilingual, and offline-first learning** to underserved students in Grades 3–11, helping bridge the **digital divide**.  
-
-📌 **Scalability**: Built with a **lightweight offline-first architecture**, it works on low-end Android devices and can scale across **schools, NGOs, and rural education systems** globally.  
-
-📌 **Why Offklass Matters**:  
-- Supports **SDG 4: Quality Education**  
-- Enables **equitable access** to modern learning resources  
-- Provides **AI-powered personalized tutoring** without needing internet  
+⚡ Question: Do you also want me to **add a “For Enactus / Hackathon Pitch” section** at the bottom (like *Impact, Scalability, Why Offklass matters*), so it doubles as both README + pitch material?
