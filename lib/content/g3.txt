@@ -1,0 +1,26 @@
+import { GradeContent, id } from "./types";
+
+export const G3: GradeContent = {
+  grade: 3,
+  units: [
+    {
+      unitId: "g3_u1",
+      name: "Place Value & Rounding",
+      flashcards: [
+        { id: id(3,1,"fc","place_value_ones_to_10000"), type:"fc", title:"Place Value: ones→10,000" },
+        { id: id(3,1,"fc","expanded_form"),             type:"fc", title:"Expanded Form" },
+        { id: id(3,1,"fc","compare_numbers"),           type:"fc", title:">, <, = Compare" },
+      ],
+      videos: [
+        { id: id(3,1,"vid","base_ten_models"),          type:"vid", title:"Base-Ten Models", durationMin:4 },
+        { id: id(3,1,"vid","rounding_to_10_100"),       type:"vid", title:"Rounding to 10/100", durationMin:5 },
+      ],
+      quizzes: [
+        { id: id(3,1,"qz","quick_check"),               type:"qz", title:"Quick Check" },
+        { id: id(3,1,"qz","mastery"),                   type:"qz", title:"Mastery" },
+      ],
+    },
+    // ...g3_u2..g3_u7 (you can copy from the canvas map)
+  ],
+};
+// sample only for testing and will be replaced with full content later

@@ -1,0 +1,13 @@
+import type { GradeContent } from "./types";
+import  { G3 } from "./g3";
+// TODO : import g4 to g11 here
+
+export const CONTENT_BY_GRADE: Record<string, GradeContent[]> = {
+    "3": [G3],
+    // "4": [G4] to "11": [G11] here
+};
+
+export function getGradeContent(grade:number, track?: "foundations"|"precalc"): GradeContent[] {
+    const list = CONTENT_BY_GRADE[String(grade)] || [];
+    return track ? list.filter(p => p.track === track): list;
+}

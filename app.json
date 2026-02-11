@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "offklass-expo",
+    "slug": "offklass",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "offklass",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.parthpatel2005.offklassexpo",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-video",
+      "expo-asset",
+      "expo-font",
+      "expo-build-properties",
+      {
+        "android": {
+          "gradlePluginVersion": "8.4.2",
+          "kotlinVersion": "1.9.24"
+        }
+      }
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "tsconfigPaths": true
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "37f0f593-3102-4a6a-9813-84818272d74f"
+      }
+    },
+    "owner": "parth-patel-2005"
+  }
+}
