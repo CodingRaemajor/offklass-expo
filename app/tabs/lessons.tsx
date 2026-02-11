@@ -92,7 +92,7 @@ const VIDEO_LESSONS: Record<Subject, VideoLesson[]> = {
       description: "Learn how to identify ones and tens place in numbers.",
       unit: "Unit 1: Place Value",
       topic: "Place Value Basics",
-      source: require("../../assets/videos/Lesson1.mp4"),
+      source: require("../../assets/videos/lesson1.mp4"),
     },
     {
       id: "m2",
@@ -100,7 +100,7 @@ const VIDEO_LESSONS: Record<Subject, VideoLesson[]> = {
       description: "Discover how to compare numbers using place value.",
       unit: "Unit 1: Place Value",
       topic: "Comparing Numbers",
-      source: require("../../assets/videos/Lesson2.mp4"),
+      source: require("../../assets/videos/lesson2.mp4"),
     },
     {
       id: "m3",
@@ -108,7 +108,7 @@ const VIDEO_LESSONS: Record<Subject, VideoLesson[]> = {
       description: "Explore three-digit numbers and the hundreds place.",
       unit: "Unit 1: Place Value",
       topic: "Three-Digit Numbers",
-      source: require("../../assets/videos/Lesson3.mp4"),
+      source: require("../../assets/videos/lesson3.mp4"),
     },
     {
       id: "m4",
@@ -116,7 +116,7 @@ const VIDEO_LESSONS: Record<Subject, VideoLesson[]> = {
       description: "Learn to write numbers in expanded form using place value.",
       unit: "Unit 1: Place Value",
       topic: "Expanded Notation",
-      source: require("../../assets/videos/Lesson4.mp4"),
+      source: require("../../assets/videos/lesson4.mp4"),
     },
   ],
 };
