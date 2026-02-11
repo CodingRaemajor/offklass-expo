@@ -131,7 +131,7 @@ npx expo run:android
 Place your quantized model :
 
 ```
-Qwen2.5-3B-Instruct-Q4_K_M.gguf
+Gemma-3 1B (local LLM)
 ```
 
 inside:
@@ -197,6 +197,10 @@ Contributions are welcome!
 Software Systems Student — University of Regina\
 Founder and Lead Developer, **Offklass** | Enactus Regina
 
+**Saumin Bhagatwala**\
+Software System Development - University Of Regina\
+Backend DevOps, **Offklass** | Enactus Regina
+
 ---
 
 ## 🌟 Impact & Vision
@@ -214,4 +218,8 @@ Founder and Lead Developer, **Offklass** | Enactus Regina
 ---
 
 ⭐ If you believe in **accessible education**, consider starring the repo and sharing Offklass.
+
+
+
+
 
