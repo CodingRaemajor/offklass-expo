@@ -1,7 +1,6 @@
 // components/AskAIButton.tsx
-
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -33,12 +32,8 @@ export function AskAIButton({
   };
 
   return (
-    <TouchableOpacity style={styles.container} onPress={handlePress}>
-      <Ionicons
-        name="chatbubble-ellipses-outline"
-        size={18}
-        color="#A855F7"
-      />
+    <TouchableOpacity style={styles.container} onPress={handlePress} activeOpacity={0.85}>
+      <Ionicons name="chatbubble-ellipses-outline" size={18} color="#6D28D9" />
       <Text style={styles.text}>Ask Offklass AI about this</Text>
     </TouchableOpacity>
   );
@@ -49,16 +44,18 @@ const styles = StyleSheet.create({
     marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: "rgba(124, 58, 237, 0.12)",
+    backgroundColor: "rgba(109, 40, 217, 0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(109, 40, 217, 0.18)",
     alignSelf: "flex-start",
   },
   text: {
-    marginLeft: 6,
-    color: "#E5E7EB",
+    marginLeft: 8,
+    color: "#111827", // DARK (fixed)
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: "800",
   },
 });

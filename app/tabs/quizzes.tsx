@@ -1,3 +1,4 @@
+// app/(tabs)/quizzes.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -5,11 +6,18 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  TextInput,
+  Dimensions,
+  Pressable,
+  Modal,
 } from "react-native";
-import { Colors } from "../../lib/colors";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+
 import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
 import { AskAIButton } from "../../components/AskAIButton";
-import { NextStepFooter } from "../../components/NextStepFooter";
 
 /* ----------------------------- Quiz Data ---------------------------- */
 
@@ -20,17 +28,22 @@ type QuizQuestion = {
   correctAnswer: string;
   topic: string;
   explanation: string;
+  difficulty?: "Easy" | "Medium" | "Hard";
+  type?: "Premade Quiz" | "Practice";
 };
 
 const BASE_QUESTIONS: QuizQuestion[] = [
   {
     id: 1,
-    question: "If you have 2 hundreds blocks, 4 tens blocks, and 7 ones blocks, what number do they represent?",
+    question:
+      "If you have 2 hundreds blocks, 4 tens blocks, and 7 ones blocks, what number do they represent?",
     options: ["247", "274", "427", "742"],
     correctAnswer: "247",
     topic: "Place Value Blocks",
     explanation:
       "Count each type of block: 2 hundreds = 200, 4 tens = 40, 7 ones = 7. Add them together: 200 + 40 + 7 = 247.",
+    difficulty: "Medium",
+    type: "Premade Quiz",
   },
   {
     id: 2,
@@ -38,8 +51,9 @@ const BASE_QUESTIONS: QuizQuestion[] = [
     options: ["3", "30", "300", "3,000"],
     correctAnswer: "300",
     topic: "Place Value Tables",
-    explanation:
-      "The digit 3 is in the hundreds place. So its value is 3 × 100 = 300.",
+    explanation: "The digit 3 is in the hundreds place. So its value is 3 × 100 = 300.",
+    difficulty: "Medium",
+    type: "Premade Quiz",
   },
   {
     id: 3,
@@ -49,6 +63,8 @@ const BASE_QUESTIONS: QuizQuestion[] = [
     topic: "Finding Place Value",
     explanation:
       "Looking at 47,856 from right to left: 6 is ones, 5 is tens, 8 is hundreds, 7 is thousands.",
+    difficulty: "Medium",
+    type: "Premade Quiz",
   },
   {
     id: 4,
@@ -58,15 +74,20 @@ const BASE_QUESTIONS: QuizQuestion[] = [
     topic: "Creating the Largest Number",
     explanation:
       "To make the largest number, put the biggest digits in the highest place values: 8 in thousands, 5 in hundreds, 3 in tens, 1 in ones = 8,531.",
+    difficulty: "Medium",
+    type: "Premade Quiz",
   },
   {
     id: 5,
-    question: "In a place value chart, what number is shown by: Ten-thousands: 4, Thousands: 0, Hundreds: 6, Tens: 2, Ones: 9?",
+    question:
+      "In a place value chart, what number is shown by: Ten-thousands: 4, Thousands: 0, Hundreds: 6, Tens: 2, Ones: 9?",
     options: ["40,629", "46,290", "4,629", "406,290"],
     correctAnswer: "40,629",
     topic: "Place Value Tables",
     explanation:
       "Read from left to right: 4 in ten-thousands = 40,000, 0 in thousands = 0, 6 in hundreds = 600, 2 in tens = 20, 9 in ones = 9. Total: 40,629.",
+    difficulty: "Medium",
+    type: "Premade Quiz",
   },
   {
     id: 6,
@@ -76,6 +97,8 @@ const BASE_QUESTIONS: QuizQuestion[] = [
     topic: "Place Value Blocks",
     explanation:
       "340 = 3 hundreds + 4 tens + 0 ones. So you need 4 tens blocks (the digit in the tens place).",
+    difficulty: "Easy",
+    type: "Premade Quiz",
   },
   {
     id: 7,
@@ -85,15 +108,20 @@ const BASE_QUESTIONS: QuizQuestion[] = [
     topic: "Finding Place Value",
     explanation:
       "Break down each digit by its place value: 6 is in thousands (6,000), 2 is in hundreds (200), 5 is in tens (50), 8 is in ones (8).",
+    difficulty: "Medium",
+    type: "Premade Quiz",
   },
   {
     id: 8,
-    question: "If you arrange the digits 2, 9, 4, 7 to make the smallest possible number, what do you get?",
+    question:
+      "If you arrange the digits 2, 9, 4, 7 to make the smallest possible number, what do you get?",
     options: ["2479", "2749", "4279", "7942"],
     correctAnswer: "2479",
     topic: "Creating the Largest Number",
     explanation:
       "To make the smallest number, put the smallest digits in the highest place values: 2 in thousands, 4 in hundreds, 7 in tens, 9 in ones = 2,479.",
+    difficulty: "Medium",
+    type: "Premade Quiz",
   },
   {
     id: 9,
@@ -103,15 +131,20 @@ const BASE_QUESTIONS: QuizQuestion[] = [
     topic: "Place Value Tables",
     explanation:
       "The zero is a placeholder in the thousands position, showing that there are no thousands. Without it, the number would be 8,456 instead of 80,456.",
+    difficulty: "Medium",
+    type: "Premade Quiz",
   },
   {
     id: 10,
-    question: "If you have 1 thousand block, 0 hundred blocks, 3 ten blocks, and 5 one blocks, what number is represented?",
+    question:
+      "If you have 1 thousand block, 0 hundred blocks, 3 ten blocks, and 5 one blocks, what number is represented?",
     options: ["135", "1,035", "1,305", "10,35"],
     correctAnswer: "1,035",
     topic: "Place Value Blocks",
     explanation:
       "Count the blocks: 1 thousand = 1,000, 0 hundreds = 0, 3 tens = 30, 5 ones = 5. Total: 1,000 + 0 + 30 + 5 = 1,035.",
+    difficulty: "Easy",
+    type: "Premade Quiz",
   },
   {
     id: 11,
@@ -121,6 +154,8 @@ const BASE_QUESTIONS: QuizQuestion[] = [
     topic: "Finding Place Value",
     explanation:
       "In 3,254: 3 is thousands, 2 is hundreds, 5 is tens, 4 is ones. Only 3,254 has 5 in the tens place.",
+    difficulty: "Medium",
+    type: "Premade Quiz",
   },
   {
     id: 12,
@@ -130,6 +165,8 @@ const BASE_QUESTIONS: QuizQuestion[] = [
     topic: "Creating the Largest Number",
     explanation:
       "Arrange from largest to smallest: 9 (thousands), 6 (hundreds), 2 (tens), 0 (ones) = 9,620.",
+    difficulty: "Easy",
+    type: "Premade Quiz",
   },
 ];
 
@@ -141,143 +178,224 @@ type Lang = (typeof LANGS)[number];
 const L10N: Record<
   Lang,
   {
-    title: string;
-    subtitle: string;
-    questionOf: (a: number, b: number) => string;
-    topic: string;
-    submit: string;
+    qOf: (a: number, b: number) => string;
+    score: string;
+    premade: string;
+    practice: string;
+    explain: string;
+    placeholder: string;
+    back: string;
     next: string;
+    submit: string;
+    finish: string;
     correct: string;
     incorrect: string;
+
     doneTitle: string;
     doneScore: (s: number, t: number) => string;
     playAgain: string;
-    score: string;
-    current: string;
-    total: string;
-    progressSuffix: string;
-    explanationTitle: string;
-    needsPracticeLabel: string;
-    practiceModeLabel: string;
+    practiceBtn: string;
+    noWrong: string;
+
+    // game-y copy
+    rank: string;
+    rankA: string;
+    rankB: string;
+    rankC: string;
+    rankD: string;
+    rewardsTitle: string;
+    wrongTitle: string;
   }
 > = {
   English: {
-    title: "🎯 Place Value Quiz!",
-    subtitle: "Master place value concepts and earn points!",
-    questionOf: (a, b) => `Question ${a} of ${b}`,
-    topic: "Topic",
-    submit: "Submit Answer",
-    next: "Next Question ▶",
-    correct: "✅ Correct!",
-    incorrect: "❌ Incorrect.",
-    doneTitle: "Quiz Completed!",
-    doneScore: (s, t) => `You scored ${s} out of ${t}!`,
-    playAgain: "⟳ Play Again",
+    qOf: (a, b) => `Question ${a} / ${b}`,
     score: "Score",
-    current: "Current",
-    total: "Total",
-    progressSuffix: "%",
-    explanationTitle: "Why this answer is correct",
-    needsPracticeLabel: "Mark as Needs Practice",
-    practiceModeLabel: "Practice questions marked 'Needs Practice'",
+    premade: "Premade Quiz",
+    practice: "Practice",
+    explain: "Explain the Answer",
+    placeholder: "Ask for more explanation...",
+    back: "Back",
+    next: "Next",
+    submit: "Submit",
+    finish: "Finish",
+    correct: "Correct",
+    incorrect: "Incorrect",
+
+    doneTitle: "Level Complete!",
+    doneScore: (s, t) => `You scored ${s} / ${t}`,
+    playAgain: "Play Again",
+    practiceBtn: "Practice Wrong Questions",
+    noWrong: "Perfect! No wrong questions 🎉",
+
+    rank: "Rank",
+    rankA: "Legend",
+    rankB: "Pro",
+    rankC: "Rising Star",
+    rankD: "Keep Going",
+    rewardsTitle: "Rewards",
+    wrongTitle: "Practice Targets",
   },
   नेपाली: {
-    title: "🎯 स्थानीय मूल्य क्विज!",
-    subtitle: "स्थानीय मूल्य अवधारणाहरू सिक्नुहोस् र अंक कमाउनुहोस्!",
-    questionOf: (a, b) => `प्रश्न ${a} / ${b}`,
-    topic: "विषय",
-    submit: "उत्तर पठाउनुहोस्",
-    next: "अर्को प्रश्न ▶",
-    correct: "✅ सहि!",
-    incorrect: "❌ गलत।",
-    doneTitle: "क्विज समाप्त!",
-    doneScore: (s, t) => `तपाईंले ${t} मध्ये ${s} अंक प्राप्त गर्नुभयो!`,
-    playAgain: "⟳ फेरि खेल्नुहोस्",
+    qOf: (a, b) => `प्रश्न ${a} / ${b}`,
     score: "अंक",
-    current: "हालको",
-    total: "जम्मा",
-    progressSuffix: "%",
-    explanationTitle: "यो उत्तर किन सहि हो",
-    needsPracticeLabel: "पुन: अभ्यास चाहिन्छ भनेर चिन्ह लगाउनुहोस्",
-    practiceModeLabel:
-      "'पुन: अभ्यास' चिन्हित प्रश्नहरू मात्र अभ्यास गर्नुहोस्",
+    premade: "तयार क्विज",
+    practice: "अभ्यास",
+    explain: "उत्तर बुझाउनुहोस्",
+    placeholder: "थप व्याख्या सोध्नुहोस्...",
+    back: "पछाडि",
+    next: "अर्को",
+    submit: "पेश गर्नुहोस्",
+    finish: "समाप्त",
+    correct: "सही",
+    incorrect: "गलत",
+
+    doneTitle: "लेभल पूरा!",
+    doneScore: (s, t) => `तपाईंको स्कोर ${s} / ${t}`,
+    playAgain: "फेरि खेल्नुहोस्",
+    practiceBtn: "गलत प्रश्न अभ्यास गर्नुहोस्",
+    noWrong: "एकदमै राम्रो! कुनै गलत छैन 🎉",
+
+    rank: "र्‍याङ्क",
+    rankA: "लेजेंड",
+    rankB: "प्रो",
+    rankC: "राइजिङ स्टार",
+    rankD: "जारी राख्नुहोस्",
+    rewardsTitle: "इनाम",
+    wrongTitle: "अभ्यास लक्ष्य",
   },
   اردو: {
-    title: "🎯 مقامی قدر کوئز!",
-    subtitle: "مقامی قدر کی تصورات سیکھیں اور پوائنٹس حاصل کریں!",
-    questionOf: (a, b) => `سوال ${a} از ${b}`,
-    topic: "موضوع",
-    submit: "جواب جمع کریں",
-    next: "اگلا سوال ▶",
-    correct: "✅ درست!",
-    incorrect: "❌ غلط۔",
-    doneTitle: "کوئز مکمل!",
-    doneScore: (s, t) => `آپ نے ${t} میں سے ${s} اسکور کیا!`,
-    playAgain: "⟳ دوبارہ کھیلیں",
+    qOf: (a, b) => `سوال ${a} / ${b}`,
     score: "اسکور",
-    current: "موجودہ",
-    total: "کل",
-    progressSuffix: "%",
-    explanationTitle: "یہ جواب کیوں درست ہے",
-    needsPracticeLabel: "مزید مشق کے لیے نشان زد کریں",
-    practiceModeLabel:
-      "صرف ان سوالات کی مشق کریں جن پر 'مزید مشق' لگا ہے",
+    premade: "تیار کوئز",
+    practice: "پریکٹس",
+    explain: "جواب سمجھائیں",
+    placeholder: "مزید وضاحت پوچھیں...",
+    back: "واپس",
+    next: "اگلا",
+    submit: "جمع کریں",
+    finish: "ختم",
+    correct: "درست",
+    incorrect: "غلط",
+
+    doneTitle: "لیول مکمل!",
+    doneScore: (s, t) => `آپ کا اسکور ${s} / ${t}`,
+    playAgain: "دوبارہ کھیلیں",
+    practiceBtn: "غلط سوالات کی مشق",
+    noWrong: "زبردست! کوئی غلط نہیں 🎉",
+
+    rank: "رینک",
+    rankA: "لیجنڈ",
+    rankB: "پرو",
+    rankC: "رائزنگ اسٹار",
+    rankD: "جاری رکھیں",
+    rewardsTitle: "انعامات",
+    wrongTitle: "پریکٹس ہدف",
   },
   বাংলা: {
-    title: "🎯 স্থানীয় মান কুইজ!",
-    subtitle: "স্থানীয় মানের ধারণা শিখুন এবং পয়েন্ট অর্জন করুন!",
-    questionOf: (a, b) => `প্রশ্ন ${a} / ${b}`,
-    topic: "বিষয়",
-    submit: "উত্তর জমা দিন",
-    next: "পরবর্তী প্রশ্ন ▶",
-    correct: "✅ সঠিক!",
-    incorrect: "❌ ভুল।",
-    doneTitle: "কুইজ সম্পন্ন!",
-    doneScore: (s, t) => `আপনি ${t} এর মধ্যে ${s} পেয়েছেন!`,
-    playAgain: "⟳ আবার খেলুন",
+    qOf: (a, b) => `প্রশ্ন ${a} / ${b}`,
     score: "স্কোর",
-    current: "বর্তমান",
-    total: "মোট",
-    progressSuffix: "%",
-    explanationTitle: "এই উত্তরটি কেন সঠিক",
-    needsPracticeLabel: "আরও অনুশীলনের জন্য চিহ্নিত করুন",
-    practiceModeLabel: "শুধু 'প্র্যাকটিস দরকার' চিহ্নিত প্রশ্নগুলো অনুশীলন করুন",
+    premade: "প্রিমেড কুইজ",
+    practice: "প্র্যাকটিস",
+    explain: "উত্তর ব্যাখ্যা করুন",
+    placeholder: "আরও ব্যাখ্যা চাই...",
+    back: "ফিরে যান",
+    next: "পরবর্তী",
+    submit: "জমা দিন",
+    finish: "শেষ",
+    correct: "সঠিক",
+    incorrect: "ভুল",
+
+    doneTitle: "লেভেল শেষ!",
+    doneScore: (s, t) => `আপনার স্কোর ${s} / ${t}`,
+    playAgain: "আবার খেলুন",
+    practiceBtn: "ভুল প্রশ্ন প্র্যাকটিস",
+    noWrong: "দারুণ! কোনো ভুল নেই 🎉",
+
+    rank: "র‍্যাঙ্ক",
+    rankA: "লেজেন্ড",
+    rankB: "প্রো",
+    rankC: "রাইজিং স্টার",
+    rankD: "চালিয়ে যান",
+    rewardsTitle: "রিওয়ার্ড",
+    wrongTitle: "প্র্যাকটিস টার্গেট",
   },
   हिन्दी: {
-    title: "🎯 स्थानीय मान क्विज़!",
-    subtitle: "स्थानीय मान की अवधारणाएं सीखें और पॉइंट्स कमाएँ!",
-    questionOf: (a, b) => `प्रश्न ${a} / ${b}`,
-    topic: "विषय",
-    submit: "उत्तर भेजें",
-    next: "अगला प्रश्न ▶",
-    correct: "✅ सही!",
-    incorrect: "❌ गलत।",
-    doneTitle: "क्विज़ पूरा!",
-    doneScore: (s, t) => `आपने ${t} में से ${s} स्कोर किया!`,
-    playAgain: "⟳ फिर से खेलें",
+    qOf: (a, b) => `प्रश्न ${a} / ${b}`,
     score: "स्कोर",
-    current: "वर्तमान",
-    total: "कुल",
-    progressSuffix: "%",
-    explanationTitle: "यह उत्तर सही क्यों है",
-    needsPracticeLabel: "'अधिक अभ्यास' के लिए चिन्हित करें",
-    practiceModeLabel:
-      "सिर्फ उन्हीं प्रश्नों का अभ्यास करें जिन पर 'अधिक अभ्यास' लगा है",
+    premade: "Premade Quiz",
+    practice: "Practice",
+    explain: "Answer समझाओ",
+    placeholder: "और explanation पूछो...",
+    back: "Back",
+    next: "Next",
+    submit: "Submit",
+    finish: "Finish",
+    correct: "Correct",
+    incorrect: "Incorrect",
+
+    doneTitle: "Level Complete!",
+    doneScore: (s, t) => `You scored ${s} / ${t}`,
+    playAgain: "Play Again",
+    practiceBtn: "Practice Wrong Questions",
+    noWrong: "Perfect! No wrong questions 🎉",
+
+    rank: "Rank",
+    rankA: "Legend",
+    rankB: "Pro",
+    rankC: "Rising Star",
+    rankD: "Keep Going",
+    rewardsTitle: "Rewards",
+    wrongTitle: "Practice Targets",
   },
 };
 
-export default function Quizzes() {
-  // active questions (can change for Needs Practice mode)
-  const [questions, setQuestions] = useState<QuizQuestion[]>(BASE_QUESTIONS);
-  const [current, setCurrent] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [isAnswered, setIsAnswered] = useState(false);
-  const [score, setScore] = useState(0);
-  const [done, setDone] = useState(false);
-  const [needsPracticeIds, setNeedsPracticeIds] = useState<number[]>([]);
+/* ------------------------------- UI (Home-like) ------------------------------ */
 
-  // language (loaded from onboarding)
+const BG = "#EEF4FF";
+const WHITE = "rgba(255,255,255,0.92)";
+
+type AnswerState = { selected: string | null; isAnswered: boolean };
+
+function clampPct(n: number) {
+  return Math.max(0, Math.min(100, n));
+}
+
+function starsForPct(p: number) {
+  if (p >= 90) return 5;
+  if (p >= 75) return 4;
+  if (p >= 55) return 3;
+  if (p >= 35) return 2;
+  return 1;
+}
+
+export default function Quizzes() {
+  const insets = useSafeAreaInsets();
+  const { width } = Dimensions.get("window");
+  const isTablet = width >= 900;
+
   const [lang, setLang] = useState<Lang>("English");
+  const T = useMemo(() => L10N[lang], [lang]);
+
+  const isRTL = lang === "اردو";
+  const rtl = isRTL
+    ? ({ writingDirection: "rtl" as const, textAlign: "right" as const } as const)
+    : undefined;
+
+  // mode + questions
+  const [mode, setMode] = useState<"quiz" | "practice">("quiz");
+  const [questions, setQuestions] = useState<QuizQuestion[]>(BASE_QUESTIONS);
+
+  // navigation + answers
+  const [current, setCurrent] = useState(0);
+  const [answers, setAnswers] = useState<Record<number, AnswerState>>({});
+  const [done, setDone] = useState(false);
+
+  // wrong question ids from QUIZ mode
+  const [wrongIds, setWrongIds] = useState<number[]>([]);
+
+  // AI panel
+  const [aiText, setAiText] = useState("");
+  const [showExplainSheet, setShowExplainSheet] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -287,427 +405,895 @@ export default function Quizzes() {
     })();
   }, []);
 
-  const T = useMemo(() => L10N[lang], [lang]);
-  const isRTL = lang === "اردو";
-  const rtl = isRTL
-    ? { writingDirection: "rtl" as "rtl", textAlign: "right" as const }
-    : undefined;
-
-  const q = questions[current];
   const total = questions.length;
+  const q = questions[current];
 
-  function selectOption(opt: string) {
-    if (isAnswered || done) return;
-    setSelected(opt);
-  }
+  const a: AnswerState = answers[q?.id ?? -1] ?? { selected: null, isAnswered: false };
+  const selected = a.selected;
+  const isAnswered = a.isAnswered;
 
-  function submit() {
-    if (selected == null || isAnswered || done) return;
-    setIsAnswered(true);
-    if (selected === q.correctAnswer) {
-      setScore((s) => s + 1);
+  const score = useMemo(() => {
+    return questions.reduce((acc, qq) => {
+      const st = answers[qq.id];
+      if (st?.isAnswered && st.selected === qq.correctAnswer) return acc + 1;
+      return acc;
+    }, 0);
+  }, [answers, questions]);
+
+  const answeredCount = useMemo(() => {
+    return questions.reduce((acc, qq) => (answers[qq.id]?.isAnswered ? acc + 1 : acc), 0);
+  }, [answers, questions]);
+
+  const progressPct = useMemo(() => {
+    return clampPct(Math.round((answeredCount / Math.max(1, total)) * 100));
+  }, [answeredCount, total]);
+
+  const answeredCorrect = isAnswered && selected === q.correctAnswer;
+
+  const selectOption = (opt: string) => {
+    if (done) return;
+    if (isAnswered) return;
+    setAnswers((prev) => ({
+      ...prev,
+      [q.id]: { selected: opt, isAnswered: false },
+    }));
+  };
+
+  const submit = () => {
+    if (done) return;
+    if (selected == null) return;
+    if (isAnswered) return;
+
+    const isWrong = selected !== q.correctAnswer;
+
+    setAnswers((prev) => ({
+      ...prev,
+      [q.id]: { selected, isAnswered: true },
+    }));
+
+    if (mode === "quiz" && isWrong) {
+      setWrongIds((ids) => (ids.includes(q.id) ? ids : [...ids, q.id]));
     }
-  }
+  };
 
-  function next() {
+  const goNextOrFinish = () => {
+    if (done) return;
     if (!isAnswered) return;
+
     if (current < total - 1) {
       setCurrent((i) => i + 1);
-      setSelected(null);
-      setIsAnswered(false);
+      setAiText("");
     } else {
       setDone(true);
     }
-  }
+  };
 
-  function restart() {
-    setQuestions(BASE_QUESTIONS);
-    setCurrent(0);
-    setSelected(null);
-    setIsAnswered(false);
-    setScore(0);
-    setDone(false);
-    // keep needsPracticeIds so they can still practice them later
-  }
+  const backQuestion = () => {
+    if (done) return;
 
-  function markNeedsPractice() {
-    if (!needsPracticeIds.includes(q.id)) {
-      setNeedsPracticeIds((ids) => [...ids, q.id]);
-    }
-  }
-
-  function startNeedsPracticeMode() {
-    const practiceQuestions = BASE_QUESTIONS.filter((qq) =>
-      needsPracticeIds.includes(qq.id)
-    );
-    if (practiceQuestions.length === 0) {
+    if (current > 0) {
+      setCurrent((i) => Math.max(0, i - 1));
+      setAiText("");
       return;
     }
-    setQuestions(practiceQuestions);
-    setCurrent(0);
-    setSelected(null);
-    setIsAnswered(false);
-    setScore(0);
-    setDone(false);
-  }
+    router.back();
+  };
 
-  const progressPct = useMemo(
-    () =>
-      Math.round(
-        ((done ? total : current) / (total === 0 ? 1 : total)) * 100
-      ),
-    [current, done, total]
-  );
+  const explainNow = () => {
+    if (!q) return;
+    setShowExplainSheet(true);
+    setAiText(q.explanation);
+  };
+
+  const restartQuiz = () => {
+    setMode("quiz");
+    setQuestions(BASE_QUESTIONS);
+    setCurrent(0);
+    setAnswers({});
+    setWrongIds([]);
+    setDone(false);
+    setAiText("");
+    setShowExplainSheet(false);
+  };
+
+  const startPracticeWrong = () => {
+    const wrong = BASE_QUESTIONS.filter((qq) => wrongIds.includes(qq.id));
+    if (wrong.length === 0) return;
+
+    setMode("practice");
+    setQuestions(
+      wrong.map((qq) => ({
+        ...qq,
+        type: "Practice",
+      }))
+    );
+    setCurrent(0);
+    setAnswers({});
+    setDone(false);
+    setAiText("");
+    setShowExplainSheet(false);
+  };
+
+  const headerTagType = q?.type ?? (mode === "practice" ? T.practice : T.premade);
+  const headerTagDiff = q?.difficulty ?? "Medium";
+
+  // ---- game-y results (DONE screen) ----
+  const resultPct = total === 0 ? 0 : Math.round((score / total) * 100);
+  const starCount = starsForPct(resultPct);
+
+  const rankLabel = useMemo(() => {
+    if (resultPct >= 90) return T.rankA;
+    if (resultPct >= 75) return T.rankB;
+    if (resultPct >= 55) return T.rankC;
+    return T.rankD;
+  }, [resultPct, T]);
+
+  const rankIcon = useMemo(() => {
+    if (resultPct >= 90) return "trophy";
+    if (resultPct >= 75) return "medal";
+    if (resultPct >= 55) return "ribbon";
+    return "sparkles";
+  }, [resultPct]);
+
+  const wrongCount = wrongIds.length;
+  const targetTopics = useMemo(() => {
+    // show up to 3 targets on results card (makes it feel like a game "quests")
+    const wrongQs = BASE_QUESTIONS.filter((qq) => wrongIds.includes(qq.id));
+    const topics = Array.from(new Set(wrongQs.map((x) => x.topic)));
+    return topics.slice(0, 3);
+  }, [wrongIds]);
 
   return (
-    <View style={s.container}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        overScrollMode="never"
-      >
-        {/* Header */}
-        <View style={{ alignItems: "center", marginBottom: 12 }}>
-          <Text style={[s.h1, rtl]}>{T.title}</Text>
-          <Text style={[s.sub, rtl]}>{T.subtitle}</Text>
-        </View>
-
-        {!done ? (
-          <View style={s.card}>
-            <View style={s.cardHeader}>
-              <Text style={[s.cardTitle, rtl]}>
-                {T.questionOf(current + 1, total)}
-              </Text>
-              <Text style={[s.topic, rtl]}>
-                {T.topic}: {q.topic}
-              </Text>
-            </View>
-
-            <View style={{ padding: 16 }}>
-              <Text style={[s.question, rtl]}>{q.question}</Text>
-
-              <View style={{ gap: 10, marginTop: 14 }}>
-                {q.options.map((opt) => {
-                  const isCorrect = opt === q.correctAnswer;
-                  const isSelected = selected === opt;
-
-                  let bg = "rgba(31,41,55,0.6)"; // idle
-                  let border = "#374151";
-                  let txt = "#E5E7EB";
-
-                  if (!isAnswered && isSelected) {
-                    bg = "#EA580C";
-                    border = "#F59E0B";
-                    txt = "#FFFFFF";
-                  }
-
-                  if (isAnswered) {
-                    if (isCorrect) {
-                      bg = "#16A34A";
-                      border = "#22C55E";
-                      txt = "#FFFFFF";
-                    } else if (isSelected && !isCorrect) {
-                      bg = "#DC2626";
-                      border = "#EF4444";
-                      txt = "#FFFFFF";
-                    } else {
-                      bg = "rgba(55,65,81,0.6)";
-                      border = "#4B5563";
-                      txt = "#D1D5DB";
-                    }
-                  }
-
-                  return (
-                    <TouchableOpacity
-                      key={opt}
-                      disabled={isAnswered || done}
-                      onPress={() => selectOption(opt)}
-                      style={[
-                        s.option,
-                        { backgroundColor: bg, borderColor: border },
-                      ]}
-                    >
-                      <Text style={[s.optionTxt, { color: txt }, rtl]}>
-                        {opt}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Explanation + feedback */}
-              {isAnswered && (
-                <View style={{ marginTop: 14 }}>
-                  <Text style={[s.feedback, rtl]}>
-                    {selected === q.correctAnswer
-                      ? T.correct
-                      : T.incorrect}
-                  </Text>
-                  <Text style={[s.explanationTitle, rtl]}>
-                    {T.explanationTitle}
-                  </Text>
-                  <Text style={[s.explanation, rtl]}>{q.explanation}</Text>
-                </View>
-              )}
-
-              {/* Inline Ask Offklass AI */}
-              <AskAIButton
-                question={q.question}
-                userAnswer={selected ?? ""}
-                correctAnswer={q.correctAnswer}
-                contextType="quiz"
-              />
-
-              {/* Actions row */}
-              <View style={s.actions}>
-                {!isAnswered ? (
-                  <TouchableOpacity
-                    onPress={submit}
-                    disabled={selected == null}
-                    style={[
-                      s.btn,
-                      s.btnSubmit,
-                      selected == null && s.disabled,
-                    ]}
-                  >
-                    <Text style={s.btnTxt}>{T.submit}</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    onPress={next}
-                    style={[s.btn, s.btnNext]}
-                  >
-                    <Text style={s.btnTxt}>{T.next}</Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  onPress={markNeedsPractice}
-                  style={[s.btnSmall, s.btnNeedsPractice]}
-                >
-                  <Text style={s.btnNeedsPracticeTxt}>
-                    {T.needsPracticeLabel}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <View style={[s.card, s.center]}>
-            <Text style={[s.doneTitle, rtl]}>{T.doneTitle}</Text>
-            <Text style={[s.doneScore, rtl]}>
-              {T.doneScore(score, total)}
-            </Text>
-            <TouchableOpacity
-              onPress={restart}
-              style={[s.btn, s.btnReplay]}
-            >
-              <Text style={s.btnTxt}>{T.playAgain}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Needs Practice mode toggle */}
-        <TouchableOpacity
-          style={s.practiceToggle}
-          onPress={startNeedsPracticeMode}
+    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+      <View style={styles.container}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(16, insets.bottom + 16), paddingHorizontal: isTablet ? 22 : 14 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
         >
-          <Text style={s.practiceToggleText}>{T.practiceModeLabel}</Text>
-        </TouchableOpacity>
+          <View style={[styles.shell, isTablet ? styles.shellRow : styles.shellCol]}>
+            {/* LEFT: Quiz card */}
+            <View style={[styles.left, isTablet ? { flex: 1.1 } : { flex: 1 }]}>
+              <View style={styles.quizCard}>
+                {/* Top row */}
+                <View style={styles.topRow}>
+                  <Text style={[styles.qOf, rtl]}>{T.qOf(current + 1, total)}</Text>
+                  <Text style={[styles.score, rtl]}>
+                    {T.score}: <Text style={styles.scoreNum}>{score}</Text> / {total}
+                  </Text>
+                </View>
 
-        {/* Progress / Stats */}
-        <View style={s.statsCard}>
-          <View style={s.statsRow}>
-            <View style={s.stat}>
-              <Text style={s.statNum}>{score}</Text>
-              <Text style={[s.statLbl, rtl]}>{T.score}</Text>
-            </View>
-            <View style={s.stat}>
-              <Text style={s.statNum}>
-                {done ? total : current + 1}
-              </Text>
-              <Text style={[s.statLbl, rtl]}>{T.current}</Text>
-            </View>
-            <View style={s.stat}>
-              <Text style={s.statNum}>{total}</Text>
-              <Text style={[s.statLbl, rtl]}>{T.total}</Text>
-            </View>
-          </View>
-          <View style={s.progressOuter}>
-            <View
-              style={[s.progressInner, { width: `${progressPct}%` }]}
-            />
-          </View>
-          <Text style={[s.progressText, rtl]}>
-            {progressPct}
-            {T.progressSuffix}
-          </Text>
-        </View>
+                {/* progress */}
+                <View style={styles.progressOuter}>
+                  <View style={[styles.progressInner, { width: `${progressPct}%` }]} />
+                </View>
 
-        {/* Next steps footer when done */}
-        {done && (
-          <NextStepFooter
-            onPlayAgain={restart}
-            nextLessonPath="/tabs/lessons"
-            nextQuizPath={undefined}
-          />
-        )}
-      </ScrollView>
-    </View>
+                {!done ? (
+                  <>
+                    {/* tags */}
+                    <View style={styles.tagsRow}>
+                      <View style={[styles.tag, styles.tagGreen]}>
+                        <Text style={styles.tagTextGreen}>{headerTagType}</Text>
+                      </View>
+                      <View style={[styles.tag, styles.tagPurple]}>
+                        <Text style={styles.tagTextPurple}>{headerTagDiff}</Text>
+                      </View>
+                    </View>
+
+                    {/* question */}
+                    <Text style={[styles.question, rtl]}>{q.question}</Text>
+
+                    {/* options */}
+                    <View style={{ gap: 12 }}>
+                      {q.options.map((opt) => {
+                        const isSel = selected === opt;
+                        const isCorrect = opt === q.correctAnswer;
+
+                        let boxStyle = styles.optionIdle;
+                        let textStyle = styles.optionTextIdle;
+                        let rightIcon: null | "checkmark-circle" | "close-circle" = null;
+
+                        if (!isAnswered) {
+                          if (isSel) {
+                            boxStyle = styles.optionSelected;
+                            textStyle = styles.optionTextSelected;
+                          }
+                        } else {
+                          if (isCorrect) {
+                            boxStyle = styles.optionCorrect;
+                            textStyle = styles.optionTextSelected;
+                            rightIcon = "checkmark-circle";
+                          } else if (isSel && !isCorrect) {
+                            boxStyle = styles.optionWrong;
+                            textStyle = styles.optionTextSelected;
+                            rightIcon = "close-circle";
+                          } else {
+                            boxStyle = styles.optionIdleAnswered;
+                            textStyle = styles.optionTextIdleAnswered;
+                          }
+                        }
+
+                        return (
+                          <TouchableOpacity
+                            key={opt}
+                            activeOpacity={0.85}
+                            disabled={isAnswered}
+                            onPress={() => selectOption(opt)}
+                            style={[styles.optionBase, boxStyle]}
+                          >
+                            <Text style={[styles.optionTextBase, textStyle, rtl]}>{opt}</Text>
+                            {!!rightIcon && (
+                              <Ionicons
+                                name={rightIcon}
+                                size={22}
+                                color={rightIcon === "checkmark-circle" ? "#16A34A" : "#DC2626"}
+                              />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/* feedback banner */}
+                    {isAnswered && (
+                      <View style={[styles.feedbackBanner, answeredCorrect ? styles.bannerOk : styles.bannerBad]}>
+                        <Text
+                          style={[
+                            styles.bannerText,
+                            answeredCorrect ? { color: "#16A34A" } : { color: "#DC2626" },
+                            rtl,
+                          ]}
+                        >
+                          {answeredCorrect ? T.correct : T.incorrect}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* bottom buttons */}
+                    <View style={styles.bottomRow}>
+                      <Pressable
+                        onPress={backQuestion}
+                        style={({ pressed }) => [styles.btnGhost, pressed && { opacity: 0.9 }]}
+                      >
+                        <Ionicons name="arrow-back" size={18} color="#111827" />
+                        <Text style={styles.btnGhostText}>{T.back}</Text>
+                      </Pressable>
+
+                      {!isAnswered ? (
+                        <Pressable
+                          onPress={submit}
+                          disabled={!selected}
+                          style={({ pressed }) => [
+                            styles.btnPrimary,
+                            (!selected || pressed) && { opacity: !selected ? 0.55 : 0.92 },
+                          ]}
+                        >
+                          <Text style={styles.btnPrimaryText}>{T.submit}</Text>
+                          <Ionicons name="arrow-forward" size={18} color="#fff" />
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          onPress={goNextOrFinish}
+                          style={({ pressed }) => [styles.btnPrimary, pressed && { opacity: 0.92 }]}
+                        >
+                          <Text style={styles.btnPrimaryText}>{current < total - 1 ? T.next : T.finish}</Text>
+                          <Ionicons name="arrow-forward" size={18} color="#fff" />
+                        </Pressable>
+                      )}
+                    </View>
+                  </>
+                ) : (
+                  // ✅ GAME-Y DONE SCREEN
+                  <View style={styles.doneWrap}>
+                    {/* Banner */}
+                    <LinearGradient
+                      colors={["#5B35F2", "#2F6BFF", "#3C5CFF"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.doneBanner}
+                    >
+                      <View style={styles.doneBannerTop}>
+                        <View style={styles.doneBadge}>
+                          <Ionicons name={rankIcon as any} size={18} color="#111827" />
+                          <Text style={styles.doneBadgeText}>
+                            {T.rank}: {rankLabel}
+                          </Text>
+                        </View>
+
+                        <View style={styles.doneStarsRow}>
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Ionicons
+                              key={i}
+                              name={i < starCount ? "star" : "star-outline"}
+                              size={18}
+                              color="#FFD54A"
+                            />
+                          ))}
+                        </View>
+                      </View>
+
+                      <Text style={[styles.doneTitle, rtl]}>{T.doneTitle}</Text>
+
+                      <View style={styles.doneScoreRow}>
+                        <View style={styles.bigScorePill}>
+                          <Text style={styles.bigScoreText}>{resultPct}%</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.doneScore, rtl]}>{T.doneScore(score, total)}</Text>
+
+                          <View style={styles.miniBarOuter}>
+                            <View style={[styles.miniBarInner, { width: `${clampPct(resultPct)}%` }]} />
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* fun confetti dots */}
+                      <View style={styles.confettiRow}>
+                        <View style={[styles.dot, { opacity: 0.95 }]} />
+                        <View style={[styles.dot, { opacity: 0.7 }]} />
+                        <View style={[styles.dot, { opacity: 0.85 }]} />
+                        <View style={[styles.dot, { opacity: 0.6 }]} />
+                        <View style={[styles.dot, { opacity: 0.9 }]} />
+                      </View>
+                    </LinearGradient>
+
+                    {/* Rewards / Targets */}
+                    <View style={styles.doneCardsRow}>
+                      <View style={styles.smallCard}>
+                        <Text style={styles.smallCardTitle}>{T.rewardsTitle}</Text>
+                        <View style={{ gap: 10, marginTop: 10 }}>
+                          <View style={styles.rewardRow}>
+                            <View style={styles.rewardIcon}>
+                              <Ionicons name="flash" size={16} color="#2F6BFF" />
+                            </View>
+                            <Text style={styles.rewardText}>+ {score * 10} XP</Text>
+                          </View>
+
+                          <View style={styles.rewardRow}>
+                            <View style={styles.rewardIcon}>
+                              <Ionicons name="diamond" size={16} color="#5B35F2" />
+                            </View>
+                            <Text style={styles.rewardText}>Streak Boost</Text>
+                          </View>
+
+                          <View style={styles.rewardRow}>
+                            <View style={styles.rewardIcon}>
+                              <Ionicons name="shield-checkmark" size={16} color="#16A34A" />
+                            </View>
+                            <Text style={styles.rewardText}>Skill Up</Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.smallCard}>
+                        <Text style={styles.smallCardTitle}>{T.wrongTitle}</Text>
+                        <View style={{ marginTop: 10 }}>
+                          {mode === "quiz" ? (
+                            wrongCount === 0 ? (
+                              <Text style={styles.targetsText}>{T.noWrong}</Text>
+                            ) : (
+                              <>
+                                <Text style={styles.targetsText}>{wrongCount} questions to practice</Text>
+                                <View style={{ marginTop: 10, gap: 8 }}>
+                                  {targetTopics.map((tpc) => (
+                                    <View key={tpc} style={styles.targetPill}>
+                                      <Ionicons name="flag" size={14} color="#111827" />
+                                      <Text style={styles.targetPillText} numberOfLines={1}>
+                                        {tpc}
+                                      </Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              </>
+                            )
+                          ) : (
+                            <Text style={styles.targetsText}>Practice mode complete ✅</Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Buttons */}
+                    {mode === "quiz" && wrongCount > 0 && (
+                      <Pressable onPress={startPracticeWrong} style={({ pressed }) => [styles.donePracticeBtn, pressed && { opacity: 0.92 }]}>
+                        <Ionicons name="refresh" size={18} color="#fff" />
+                        <Text style={styles.donePracticeText}>{T.practiceBtn}</Text>
+                      </Pressable>
+                    )}
+
+                    <Pressable onPress={restartQuiz} style={({ pressed }) => [styles.doneReplayBtn, pressed && { opacity: 0.92 }]}>
+                      <Ionicons name="play" size={18} color="#fff" />
+                      <Text style={styles.doneReplayText}>{T.playAgain}</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => router.back()}
+                      style={({ pressed }) => [styles.doneExitBtn, pressed && { opacity: 0.92 }]}
+                    >
+                      <Ionicons name="home" size={18} color="#111827" />
+                      <Text style={styles.doneExitText}>Go Back</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* RIGHT: AI Helper panel (tablet only; not on done) */}
+            {isTablet && !done && (
+              <View style={[styles.right, { flex: 0.9 }]}>
+                <View style={styles.aiCard}>
+                  <View style={styles.aiHeader}>
+                    <View style={styles.aiHeaderLeft}>
+                      <View style={styles.aiIcon}>
+                        <Ionicons name="hardware-chip-outline" size={18} color="#fff" />
+                      </View>
+                      <View>
+                        <Text style={styles.aiTitle}>AI Math Helper</Text>
+                        <Text style={styles.aiSub}>Ask for more explanations!</Text>
+                      </View>
+                    </View>
+                    <Ionicons name="sparkles-outline" size={18} color="#EAF0FF" />
+                  </View>
+
+                  <View style={styles.aiBody}>
+                    {aiText ? (
+                      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
+                        <Text style={[styles.aiAnswer, rtl]}>{aiText}</Text>
+
+                        <View style={{ marginTop: 14 }}>
+                          <AskAIButton
+                            question={q.question}
+                            userAnswer={selected ?? ""}
+                            correctAnswer={q.correctAnswer}
+                            contextType="quiz"
+                          />
+                        </View>
+                      </ScrollView>
+                    ) : (
+                      <View style={styles.aiEmpty}>
+                        <View style={styles.aiBotCircle}>
+                          <Ionicons name="logo-electron" size={30} color="#fff" />
+                        </View>
+                        <Text style={[styles.aiEmptyTitle, rtl]}>
+                          Want to understand more? <Text style={{ fontSize: 16 }}>💡</Text>
+                        </Text>
+                        <Text style={[styles.aiEmptySub, rtl]}>
+                          Ask me to explain the answer or ask any questions about this concept!
+                        </Text>
+
+                        <Pressable onPress={explainNow} style={({ pressed }) => [styles.aiExplainBtn, pressed && { opacity: 0.92 }]}>
+                          <Text style={styles.aiExplainText}>{T.explain}</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.aiInputRow}>
+                    <TextInput
+                      value={""}
+                      onChangeText={() => {}}
+                      placeholder={T.placeholder}
+                      placeholderTextColor="rgba(17,24,39,0.45)"
+                      style={styles.aiInput}
+                      editable={false}
+                    />
+                    <Pressable style={styles.aiSendBtn} onPress={explainNow}>
+                      <Ionicons name="send" size={18} color="#fff" />
+                    </Pressable>
+                    <Pressable style={styles.aiLightBtn} onPress={explainNow}>
+                      <Ionicons name="bulb-outline" size={20} color="#fff" />
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* Mobile explain button */}
+          {!isTablet && !done && (
+            <View style={{ marginTop: 12 }}>
+              <Pressable onPress={explainNow} style={({ pressed }) => [styles.mobileExplainBtn, pressed && { opacity: 0.92 }]}>
+                <Ionicons name="sparkles-outline" size={18} color="#fff" />
+                <Text style={styles.mobileExplainText}>{T.explain}</Text>
+              </Pressable>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Explanation modal */}
+        <Modal visible={showExplainSheet} transparent animationType="fade" onRequestClose={() => setShowExplainSheet(false)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setShowExplainSheet(false)}>
+            <Pressable style={styles.sheetCard} onPress={() => {}}>
+              <View style={styles.sheetTop}>
+                <Text style={styles.sheetTitle}>AI Math Helper</Text>
+                <Pressable onPress={() => setShowExplainSheet(false)} style={styles.sheetClose}>
+                  <Ionicons name="close" size={18} color="#111827" />
+                </Pressable>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={[styles.sheetText, rtl]}>{q?.explanation ?? ""}</Text>
+
+                {q && (
+                  <View style={{ marginTop: 14 }}>
+                    <AskAIButton
+                      question={q.question}
+                      userAnswer={selected ?? ""}
+                      correctAnswer={q.correctAnswer}
+                      contextType="quiz"
+                    />
+                  </View>
+                )}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      </View>
+    </SafeAreaView>
   );
 }
 
-/* ---------------------------------- Styles --------------------------------- */
+/* --------------------------------- Styles --------------------------------- */
 
-const s = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: "#0B1220" },
-  h1: { fontSize: 24, fontWeight: "900", color: "white" },
-  sub: { color: "#A5B4FC", marginTop: 4 },
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: BG },
 
-  card: {
-    backgroundColor: "rgba(0,0,0,0.4)",
-    borderWidth: 2,
-    borderColor: "#EA580C",
-    borderRadius: 24,
+  scroll: { flex: 1, backgroundColor: BG },
+  scrollContent: { paddingTop: 14 },
+
+  shell: { width: "100%", maxWidth: 1280, alignSelf: "center", gap: 16 },
+  shellRow: { flexDirection: "row", alignItems: "flex-start" },
+  shellCol: { flexDirection: "column" },
+
+  /* LEFT CARD */
+  left: { flex: 1 },
+  quizCard: {
+    backgroundColor: WHITE,
+    borderRadius: 22,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
     shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-  },
-  cardHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
-  },
-  cardTitle: { color: "#FB923C", fontWeight: "800", fontSize: 16 },
-  topic: { color: "#D1D5DB", marginTop: 4, fontSize: 12 },
-
-  question: {
-    color: "white",
-    fontSize: 20,
-    fontWeight: "800",
-    marginBottom: 10,
+    shadowOpacity: 0.10,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
 
-  option: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  qOf: { color: "rgba(17,24,39,0.75)", fontWeight: "900" },
+  score: { color: "rgba(47,107,255,0.95)", fontWeight: "900" },
+  scoreNum: { color: "#2F6BFF" },
+
+  progressOuter: {
+    marginTop: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(47,107,255,0.12)",
+    overflow: "hidden",
+  },
+  progressInner: { height: "100%", borderRadius: 999, backgroundColor: "#5B35F2" },
+
+  tagsRow: { flexDirection: "row", gap: 10, marginTop: 14 },
+  tag: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1 },
+  tagGreen: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.22)" },
+  tagTextGreen: { color: "#16A34A", fontWeight: "900" },
+  tagPurple: { backgroundColor: "rgba(91,53,242,0.10)", borderColor: "rgba(91,53,242,0.20)" },
+  tagTextPurple: { color: "#5B35F2", fontWeight: "900" },
+
+  question: { marginTop: 14, marginBottom: 14, color: "#111827", fontWeight: "900", fontSize: 30, lineHeight: 36 },
+
+  optionBase: {
     borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     borderWidth: 2,
-  },
-  optionTxt: { fontSize: 16, fontWeight: "700" },
-
-  actions: {
-    marginTop: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
   },
-  btn: {
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 999,
-    borderWidth: 2,
-  },
-  btnTxt: { color: "#fff", fontWeight: "800" },
-  btnSubmit: { backgroundColor: "#EA580C", borderColor: "#F59E0B" },
-  btnNext: { backgroundColor: "#2563EB", borderColor: "#3B82F6" },
-  btnReplay: {
-    backgroundColor: "#7C3AED",
-    borderColor: "#8B5CF6",
-    marginTop: 10,
-  },
+  optionTextBase: { fontSize: 18, fontWeight: "900" },
+  optionIdle: { backgroundColor: "#FFFFFF", borderColor: "rgba(17,24,39,0.15)" },
+  optionTextIdle: { color: "#111827" },
+  optionSelected: { backgroundColor: "rgba(47,107,255,0.10)", borderColor: "#2F6BFF" },
+  optionTextSelected: { color: "#111827" },
+  optionCorrect: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "#22C55E" },
+  optionWrong: { backgroundColor: "rgba(220,38,38,0.08)", borderColor: "#EF4444" },
+  optionIdleAnswered: { backgroundColor: "rgba(255,255,255,0.6)", borderColor: "rgba(17,24,39,0.10)" },
+  optionTextIdleAnswered: { color: "rgba(17,24,39,0.45)" },
 
-  btnSmall: {
+  feedbackBanner: { marginTop: 16, borderRadius: 14, paddingVertical: 14, alignItems: "center", borderWidth: 1 },
+  bannerOk: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.25)" },
+  bannerBad: { backgroundColor: "rgba(220,38,38,0.08)", borderColor: "rgba(220,38,38,0.22)" },
+  bannerText: { fontWeight: "900", fontSize: 18 },
+
+  bottomRow: { marginTop: 18, flexDirection: "row", gap: 12, justifyContent: "space-between" },
+
+  btnGhost: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: "rgba(17,24,39,0.14)",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  btnGhostText: { color: "#111827", fontWeight: "900", fontSize: 16 },
+
+  btnPrimary: {
+    flex: 1,
+    backgroundColor: "#5B35F2",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  },
+  btnPrimaryText: { color: "#FFFFFF", fontWeight: "900", fontSize: 16 },
+
+  /* DONE */
+  doneWrap: { paddingTop: 16, paddingBottom: 10 },
+  doneBanner: {
+    borderRadius: 22,
+    padding: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  doneBannerTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  doneBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.88)",
+    borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 999,
+  },
+  doneBadgeText: { color: "#111827", fontWeight: "900" },
+  doneStarsRow: { flexDirection: "row", gap: 4 },
+
+  doneTitle: { marginTop: 12, color: "#fff", fontWeight: "900", fontSize: 28 },
+  doneScoreRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 12 },
+  bigScorePill: {
+    width: 96,
+    height: 72,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.18)",
     borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  btnNeedsPractice: {
-    borderColor: "#FBBF24",
-    backgroundColor: "rgba(251,191,36,0.12)",
-  },
-  btnNeedsPracticeTxt: {
-    color: "#FBBF24",
-    fontSize: 12,
-    fontWeight: "700",
-  },
+  bigScoreText: { color: "#fff", fontWeight: "900", fontSize: 22 },
+  doneScore: { color: "rgba(255,255,255,0.92)", fontWeight: "900", fontSize: 16 },
 
-  feedback: { color: "white", fontWeight: "800", marginTop: 8 },
-  explanationTitle: {
-    marginTop: 6,
-    color: "#9CA3AF",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  explanation: {
-    marginTop: 2,
-    color: "#D1D5DB",
-    fontSize: 13,
-  },
-
-  disabled: { opacity: 0.5 },
-
-  statsCard: {
-    backgroundColor: "rgba(17,24,39,0.6)",
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: "#10B981",
-    marginTop: 12,
-  },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 8,
-  },
-  stat: { alignItems: "center" },
-  statNum: { fontSize: 22, color: "white", fontWeight: "900" },
-  statLbl: { color: "#9CA3AF" },
-
-  progressOuter: {
+  miniBarOuter: {
+    marginTop: 8,
     height: 10,
     borderRadius: 999,
-    backgroundColor: "#1F2937",
+    backgroundColor: "rgba(255,255,255,0.25)",
     overflow: "hidden",
   },
-  progressInner: { height: "100%", backgroundColor: "#3B82F6" },
-  progressText: {
-    color: "white",
-    fontWeight: "800",
-    textAlign: "right",
-    marginTop: 6,
+  miniBarInner: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: "#FFD54A",
   },
 
-  doneTitle: {
-    color: "white",
-    fontSize: 28,
-    fontWeight: "900",
-    textAlign: "center",
-    marginTop: 16,
+  confettiRow: { marginTop: 12, flexDirection: "row", gap: 10 },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.9)",
   },
-  doneScore: {
-    color: "white",
-    fontSize: 18,
-    textAlign: "center",
-    marginVertical: 12,
-  },
-  center: { alignItems: "center", paddingVertical: 16 },
 
-  practiceToggle: {
-    marginTop: 12,
-    paddingVertical: 8,
+  doneCardsRow: { marginTop: 14, flexDirection: "row", gap: 12 },
+  smallCard: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+  },
+  smallCardTitle: { color: "#111827", fontWeight: "900" },
+
+  rewardRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  rewardIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: "rgba(47,107,255,0.10)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rewardText: { color: "#111827", fontWeight: "900" },
+
+  targetsText: { color: "rgba(17,24,39,0.75)", fontWeight: "900" },
+  targetPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: "rgba(56,189,248,0.12)",
-    alignSelf: "flex-start",
+    backgroundColor: "rgba(251,191,36,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.28)",
   },
-  practiceToggleText: {
-    color: "#38BDF8",
-    fontSize: 12,
-    fontWeight: "600",
+  targetPillText: { flex: 1, color: "#111827", fontWeight: "900" },
+
+  donePracticeBtn: {
+    marginTop: 14,
+    backgroundColor: "#111827",
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
   },
+  donePracticeText: { color: "#fff", fontWeight: "900", fontSize: 16 },
+
+  doneReplayBtn: {
+    marginTop: 10,
+    backgroundColor: "#5B35F2",
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  doneReplayText: { color: "#fff", fontWeight: "900", fontSize: 16 },
+
+  doneExitBtn: {
+    marginTop: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+    borderWidth: 2,
+    borderColor: "rgba(17,24,39,0.14)",
+  },
+  doneExitText: { color: "#111827", fontWeight: "900", fontSize: 16 },
+
+  /* RIGHT AI PANEL */
+  right: { flex: 1 },
+  aiCard: {
+    backgroundColor: WHITE,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.10,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+    height: "100%",
+    minHeight: 560,
+  },
+  aiHeader: {
+    backgroundColor: "#3C5CFF",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  aiHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  aiIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.20)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiTitle: { color: "#fff", fontWeight: "900", fontSize: 16 },
+  aiSub: { color: "rgba(255,255,255,0.9)", fontWeight: "800", marginTop: 2 },
+
+  aiBody: { flex: 1, backgroundColor: "#F4F7FF" },
+  aiEmpty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 18 },
+  aiBotCircle: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: "#6B6BFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  aiEmptyTitle: { color: "#111827", fontWeight: "900", fontSize: 20, textAlign: "center" },
+  aiEmptySub: { marginTop: 8, color: "rgba(17,24,39,0.70)", fontWeight: "800", textAlign: "center", lineHeight: 20 },
+
+  aiExplainBtn: {
+    marginTop: 14,
+    backgroundColor: "#3C5CFF",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  aiExplainText: { color: "#fff", fontWeight: "900", fontSize: 15 },
+
+  aiAnswer: { color: "#111827", fontWeight: "800", lineHeight: 20 },
+
+  aiInputRow: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.06)",
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  aiInput: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "rgba(17,24,39,0.14)",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  aiSendBtn: { width: 48, height: 48, borderRadius: 14, backgroundColor: "#7EA2FF", alignItems: "center", justifyContent: "center" },
+  aiLightBtn: { width: 48, height: 48, borderRadius: 14, backgroundColor: "#5B35F2", alignItems: "center", justifyContent: "center" },
+
+  /* MOBILE EXPLAIN BTN */
+  mobileExplainBtn: {
+    backgroundColor: "#3C5CFF",
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  },
+  mobileExplainText: { color: "#fff", fontWeight: "900", fontSize: 16 },
+
+  /* SHEET */
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.30)", justifyContent: "center", padding: 16 },
+  sheetCard: { backgroundColor: "#fff", borderRadius: 18, padding: 14, borderWidth: 1, borderColor: "rgba(0,0,0,0.08)", maxHeight: "80%" },
+  sheetTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  sheetTitle: { fontWeight: "900", color: "#111827", fontSize: 16 },
+  sheetClose: { width: 36, height: 36, borderRadius: 12, backgroundColor: "rgba(17,24,39,0.06)", alignItems: "center", justifyContent: "center" },
+  sheetText: { color: "#111827", fontWeight: "800", lineHeight: 20 },
 });
