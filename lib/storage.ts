@@ -4,7 +4,8 @@ const k = (s: string) => `offklass:${s}`;
 export type OnboardingData = {
   name: string;
   language: string;   // "English", "नेपाली", ...
-  grade: string;      // "Grade 3"...
+  grade: string; // "Grade 3".
+  school: string;
 };
 
 export async function saveJSON(key: string, v: unknown) {

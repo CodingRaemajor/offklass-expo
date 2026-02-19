@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
-import { Colors } from "../../lib/colors";
 import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
-import { getHomeSnapshot, type DaySummary } from "../../lib/progress";
+import { getHomeSnapshot } from "../../lib/progress";
+
+import DashboardHeader from "../../components/offklass/DashboardHeader";
+import StudentVector from "../../components/offklass/StudentVector";
 
 /* ------------------------------- i18n helpers ------------------------------ */
 
@@ -16,114 +17,84 @@ type Lang = (typeof LANGS)[number];
 
 const L10N = {
   English: {
-    hello: (n: string) => `Hello, ${n}!`,
     sep: " • ",
-    level: "Level",
-    streak: "Streak",
     quick: "Quick Actions",
-    recent: "Today in Regina",
-    empty: "No activity yet today",
     actions: {
       cont: "Continue Learning",
       quiz: "Take Quiz",
       flash: "Flashcards",
       ai: "Ask AI",
     },
-    pathTitle: "Start here today",
-    pathNextUp: "Next up for you",
-    pathStepsTitle: "Today's plan",
-    pathStep1: "1. Watch the lesson video",
-    pathStep2: "2. Take the short quiz",
-    pathStep3: "3. Review the flashcards",
-    pathButton: "Start this lesson",
+    subtitles: {
+      cont: "Follow your step-by-step path",
+      quiz: "Check yourself after a lesson",
+      flash: "Review key ideas and formulas",
+      ai: "Get help when you are stuck",
+    },
   },
   नेपाली: {
-    hello: (n: string) => `नमस्ते, ${n}!`,
     sep: " • ",
-    level: "स्तर",
-    streak: "स्ट्रिक",
     quick: "छिटो कार्यहरू",
-    recent: "आज रेजिना समय",
-    empty: "आज कुनै गतिविधि छैन",
     actions: {
       cont: "पढाइ जारी राख्नुहोस्",
       quiz: "क्विज दिनुहोस्",
       flash: "फ्ल्यासकार्ड",
       ai: "एआईसँग सोध्नुहोस्",
     },
-    pathTitle: "आज यहाँबाट सुरु गर्नुहोस्",
-    pathNextUp: "तपाईंको अर्को पाठ",
-    pathStepsTitle: "आजको योजना",
-    pathStep1: "१. पाठको भिडियो हेर्नुहोस्",
-    pathStep2: "२. सानो क्विज दिनुहोस्",
-    pathStep3: "३. फ्ल्यासकार्ड दोहोर्याउनुहोस्",
-    pathButton: "यो पाठ सुरु गर्नुहोस्",
+    subtitles: {
+      cont: "चरणबद्ध तरिकाले अगाडि बढ्नुहोस्",
+      quiz: "पाठपछि आफूलाई जाँच्नुहोस्",
+      flash: "मुख्य कुरा दोहोर्याउनुहोस्",
+      ai: "अड्किँदा मद्दत लिनुहोस्",
+    },
   },
   اردو: {
-    hello: (n: string) => `سلام، ${n}!`,
     sep: " • ",
-    level: "سطح",
-    streak: "سلسلہ",
     quick: "فوری اقدامات",
-    recent: "آج (ریجائنا وقت)",
-    empty: "آج ابھی کوئی سرگرمی نہیں",
     actions: {
       cont: "سیکھنا جاری رکھیں",
       quiz: "کوئز دیں",
       flash: "فلیش کارڈز",
       ai: "اے آئی سے پوچھیں",
     },
-    pathTitle: "آج یہاں سے شروع کریں",
-    pathNextUp: "آپ کا اگلا سبق",
-    pathStepsTitle: "آج کا پلان",
-    pathStep1: "1. سبق کی ویڈیو دیکھیں",
-    pathStep2: "2. چھوٹا سا کوئز دیں",
-    pathStep3: "3. فلیش کارڈز دہرائیں",
-    pathButton: "یہ سبق شروع کریں",
+    subtitles: {
+      cont: "مرحلہ وار راستہ فالو کریں",
+      quiz: "سبق کے بعد خود کو چیک کریں",
+      flash: "اہم نکات دہرائیں",
+      ai: "پھنسی ہوئی جگہ پر مدد لیں",
+    },
   },
   বাংলা: {
-    hello: (n: string) => `হ্যালো, ${n}!`,
     sep: " • ",
-    level: "লেভেল",
-    streak: "স্ট্রিক",
     quick: "দ্রুত কাজ",
-    recent: "আজ (রেজাইনা সময়)",
-    empty: "আজ এখনও কোনো কার্যকলাপ নেই",
     actions: {
       cont: "শেখা চালিয়ে যান",
       quiz: "কুইজ দিন",
       flash: "ফ্ল্যাশকার্ড",
       ai: "এআইকে জিজ্ঞাসা করুন",
     },
-    pathTitle: "আজ এখান থেকে শুরু করো",
-    pathNextUp: "তোমার পরের লেসন",
-    pathStepsTitle: "আজকের প্ল্যান",
-    pathStep1: "১. লেসনের ভিডিও দেখো",
-    pathStep2: "২. ছোট কুইজ দাও",
-    pathStep3: "৩. ফ্ল্যাশকার্ড রিভিউ করো",
-    pathButton: "এই লেসন শুরু করো",
+    subtitles: {
+      cont: "ধাপে ধাপে এগিয়ে যান",
+      quiz: "লেসনের পরে নিজেকে যাচাই করুন",
+      flash: "মূল বিষয়গুলো রিভিউ করুন",
+      ai: "আটকে গেলে সাহায্য নিন",
+    },
   },
   हिन्दी: {
-    hello: (n: string) => `नमस्ते, ${n}!`,
     sep: " • ",
-    level: "स्तर",
-    streak: "स्ट्रिक",
     quick: "त्वरित विकल्प",
-    recent: "आज (रेजाइना समय)",
-    empty: "आज अभी कोई गतिविधि नहीं",
     actions: {
       cont: "सीखना जारी रखें",
       quiz: "क्विज़ दें",
       flash: "फ्लैशकार्ड",
       ai: "एआई से पूछें",
     },
-    pathTitle: "आज यहाँ से शुरू करें",
-    pathNextUp: "आपका अगला पाठ",
-    pathStepsTitle: "आज की योजना",
-    pathStep1: "1. पाठ का वीडियो देखें",
-    pathStep2: "2. छोटा क्विज़ दें",
-    pathStep3: "3. फ्लैशकार्ड दोहराएँ",
-    pathButton: "यह पाठ शुरू करें",
+    subtitles: {
+      cont: "स्टेप-बाय-स्टेप आगे बढ़ें",
+      quiz: "पाठ के बाद खुद को जांचें",
+      flash: "मुख्य बातें दोहराएँ",
+      ai: "अटकने पर मदद लें",
+    },
   },
 } as const;
 
@@ -131,462 +102,197 @@ type Dict = typeof L10N[Lang extends keyof typeof L10N ? Lang : "English"];
 
 /* --------------------------------- Screen --------------------------------- */
 
+const BG = "#EEF4FF";
+
 export default function Home() {
   const insets = useSafeAreaInsets();
+  const { width } = Dimensions.get("window");
+  const isTablet = width >= 900;
+
   const [user, setUser] = useState<OnboardingData | null>(null);
   const [streak, setStreak] = useState(0);
   const [level, setLevel] = useState(1);
-  const [todaySummary, setTodaySummary] = useState<DaySummary | null>(null);
 
   useEffect(() => {
     (async () => {
-      setUser(await loadJSON<OnboardingData | null>(ONBOARD_KEY, null));
+      const u = await loadJSON<OnboardingData | null>(ONBOARD_KEY, null);
+      setUser(u);
+
       const snap = await getHomeSnapshot();
       setStreak(snap.streak);
       setLevel(snap.level);
-      setTodaySummary(snap.todaySummary);
     })();
   }, []);
 
   const lang = (user?.language as Lang) || "English";
   const T: Dict = (L10N as any)[LANGS.includes(lang) ? lang : "English"];
+
   const isRTL = lang === "اردو";
   const rtl = isRTL
     ? ({
-        writingDirection: "rtl" as "rtl",
+        writingDirection: "rtl" as const,
         textAlign: "right" as const,
-      })
+      } as const)
     : undefined;
 
   const name = user?.name?.trim() || "Learner";
-  const initials = name
-    .split(/\s+/)
-    .map((s) => s[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
   const grade = user?.grade ?? "Grade 6";
-  const subject = "Mathematics"; // Fixed to always show Mathematics
-  const meta = `${grade}${T.sep}${subject}`; // Now shows "Grade 6 • Mathematics"
-  const nextLessonTitle = `Unit 1: Place Value • ${subject} for ${grade}`; // Updated lesson title
+  const sublabel = `${grade} Math${T.sep}offklass`;
 
   return (
-    <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
-      <ScrollView
-        style={styles.scroller}
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: Math.max(16, insets.bottom + 16) },
-        ]}
-        bounces={false}
-        overScrollMode="never"
-      >
-        {/* Hero */}
-        <LinearGradient colors={["#A78BFA", "#7C3AED"]} style={styles.welcome}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarTxt}>{initials}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.hello, rtl]}>{T.hello(name)}</Text>
-            <Text style={[styles.meta, rtl]}>{meta}</Text>
-          </View>
-        </LinearGradient>
+    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+      <View style={styles.container}>
+        <DashboardHeader name={name} sublabel={sublabel} streak={streak} level={level} />
 
-        {/* Stats: Level + Streak */}
-        <View style={styles.statsRow}>
-          <StatTile label={T.level} value={String(level)} scheme="indigo" />
-          <StatTile label={T.streak} value={String(streak)} scheme="green" />
-        </View>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingBottom: Math.max(16, insets.bottom + 16),
+              paddingHorizontal: isTablet ? 28 : 16,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
+        >
+          <Text style={[styles.sectionTitle, rtl, { fontSize: isTablet ? 20 : 16 }]}>{T.quick}</Text>
 
-        {/* Quick Actions FIRST */}
-        <Text style={[styles.section, rtl]}>{T.quick}</Text>
-        <View style={styles.actionGrid}>
-          <ActionTile
-            icon="play-circle-outline"
-            label={T.actions.cont}
-            subtitle="Follow your step-by-step path"
-            onPress={() => router.push("/tabs/lessons")}
-            scheme="blue"
-            rtl={rtl}
-          />
-          <ActionTile
-            icon="help-circle-outline"
-            label={T.actions.quiz}
-            subtitle="Use after a lesson to check yourself"
-            onPress={() => router.push("/tabs/quizzes")}
-            scheme="orange"
-            rtl={rtl}
-          />
-          <ActionTile
-            icon="albums-outline"
-            label={T.actions.flash}
-            subtitle="Review key ideas and formulas"
-            onPress={() => router.push("/tabs/flashcards")}
-            scheme="indigo"
-            rtl={rtl}
-          />
-          <ActionTile
-            icon="sparkles-outline"
-            label={T.actions.ai}
-            subtitle="Ask for help if you are stuck"
-            onPress={() => router.push("/tabs/ai")}
-            scheme="purple"
-            rtl={rtl}
-          />
-        </View>
-
-        {/* Start here card (Today's learning path) */}
-        <View style={styles.pathCard}>
-          <Text style={[styles.pathTitle, rtl]}>{T.pathTitle}</Text>
-
-          <View className="flex-row" style={styles.pathNextRow}>
-            <View style={styles.pathDot} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.pathNextLabel, rtl]}>{T.pathNextUp}</Text>
-              <Text style={[styles.pathNextLesson, rtl]}>
-                {nextLessonTitle}
-              </Text>
-            </View>
+          <View style={styles.grid}>
+            <ActionCard
+              icon="play-circle-outline"
+              title={T.actions.cont}
+              subtitle={T.subtitles.cont}
+              onPress={() => router.push("/tabs/lessons")}
+              rtl={rtl}
+            />
+            <ActionCard
+              icon="help-circle-outline"
+              title={T.actions.quiz}
+              subtitle={T.subtitles.quiz}
+              onPress={() => router.push("/tabs/quizzes")}
+              rtl={rtl}
+            />
+            <ActionCard
+              icon="albums-outline"
+              title={T.actions.flash}
+              subtitle={T.subtitles.flash}
+              onPress={() => router.push("/tabs/flashcards")}
+              rtl={rtl}
+            />
+            <ActionCard
+              icon="sparkles-outline"
+              title={T.actions.ai}
+              subtitle={T.subtitles.ai}
+              onPress={() => router.push("/tabs/ai")}
+              rtl={rtl}
+            />
           </View>
 
-          <Text style={[styles.pathStepsTitle, rtl]}>{T.pathStepsTitle}</Text>
-          <View style={styles.pathStepsList}>
-            <Text style={[styles.pathStepText, rtl]}>{T.pathStep1}</Text>
-            <Text style={[styles.pathStepText, rtl]}>{T.pathStep2}</Text>
-            <Text style={[styles.pathStepText, rtl]}>{T.pathStep3}</Text>
+          {/* remaining space */}
+          <View style={{ marginTop: 18 }}>
+            <StudentVector height={isTablet ? 320 : 240} />
           </View>
-
-          <Pressable
-            style={styles.pathButton}
-            onPress={() => router.push("/tabs/lessons")}
-          >
-            <Text style={styles.pathButtonText}>{T.pathButton}</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
 /* ----------------------------- Subcomponents ------------------------------ */
 
-function StatTile({
-  label,
-  value,
-  scheme,
-}: {
-  label: string;
-  value: string;
-  scheme: "indigo" | "green";
-}) {
-  const map = {
-    indigo: {
-      bg: "#0B1130",
-      border: "#28356E",
-      pill: "#1F2A5A",
-      icon: "#CFD9FF",
-      iconName: "sparkles-outline" as const,
-    },
-    green: {
-      bg: "#0B1F1C",
-      border: "#155E57",
-      pill: "#065F46",
-      icon: "#CFFAFE",
-      iconName: "flame-outline" as const,
-    },
-  }[scheme];
-
-  return (
-    <View
-      style={[
-        styles.tile,
-        { backgroundColor: map.bg, borderColor: map.border },
-      ]}
-    >
-      <View style={styles.tileHeader}>
-        <View style={[styles.tileIcon, { backgroundColor: map.pill }]}>
-          <Ionicons name={map.iconName} size={18} color={map.icon} />
-        </View>
-        <Text style={styles.tileBadge}>{label}</Text>
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-    </View>
-  );
-}
-
-function ActionTile({
+function ActionCard({
   icon,
-  label,
+  title,
   subtitle,
   onPress,
-  scheme,
   rtl,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  subtitle?: string;
+  title: string;
+  subtitle: string;
   onPress: () => void;
-  scheme: "blue" | "orange" | "indigo" | "teal" | "purple";
   rtl?: { writingDirection: "rtl"; textAlign: "right" };
 }) {
-  const map = {
-    blue: {
-      bg: "#0B1730",
-      border: "#294480",
-      pill: "#1E3A8A",
-      icon: "#CFE4FF",
-    },
-    orange: {
-      bg: "#2B1406",
-      border: "#8A4C1B",
-      pill: "#7C2D12",
-      icon: "#FFE7D1",
-    },
-    indigo: {
-      bg: "#0B1130",
-      border: "#28356E",
-      pill: "#1F2A5A",
-      icon: "#CFD9FF",
-    },
-    teal: {
-      bg: "#0B1F1C",
-      border: "#155E57",
-      pill: "#065F46",
-      icon: "#CFFAFE",
-    },
-    purple: {
-      bg: "#120E2B",
-      border: "#4C2AC8",
-      pill: "#3B2A8F",
-      icon: "#E4D9FF",
-    },
-  }[scheme];
-
   return (
     <Pressable
       onPress={onPress}
-      style={[
-        styles.actionTile,
-        { backgroundColor: map.bg, borderColor: map.border },
+      style={({ pressed }) => [
+        styles.card,
+        pressed && { transform: [{ scale: 0.99 }], opacity: 0.96 },
       ]}
     >
-      <View style={[styles.tileIcon, { backgroundColor: map.pill }]}>
-        <Ionicons name={icon} size={22} color={map.icon} />
+      <View style={styles.cardIcon}>
+        <Ionicons name={icon} size={24} color="#2F6BFF" />
       </View>
-      <Text style={[styles.actionLbl, rtl]} numberOfLines={2}>
-        {label}
+
+      <Text style={[styles.cardTitle, rtl]} numberOfLines={2}>
+        {title}
       </Text>
-      {subtitle && (
-        <Text style={[styles.actionSub, rtl]} numberOfLines={2}>
-          {subtitle}
-        </Text>
-      )}
+
+      <Text style={[styles.cardSub, rtl]} numberOfLines={2}>
+        {subtitle}
+      </Text>
     </Pressable>
   );
 }
 
 /* --------------------------------- Styles --------------------------------- */
 
-const cardShadow = {
-  shadowColor: "#000",
-  shadowOpacity: 0.2,
-  shadowRadius: 10,
-  shadowOffset: { width: 0, height: 5 },
-  elevation: 5,
-};
-
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#0E0D1B",
-  },
-  scroller: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    rowGap: 12,
-    flexGrow: 1,
-  },
+  safe: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: BG },
 
-  /* Hero */
-  welcome: {
-    borderRadius: 18,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    columnGap: 12,
-    ...cardShadow,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 999,
-    backgroundColor: "#00000022",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#ffffff33",
-  },
-  avatarTxt: { color: "white", fontWeight: "900", fontSize: 16 },
-  hello: { color: "white", fontSize: 18, fontWeight: "900" },
-  meta: { color: "white", opacity: 0.9, marginTop: 2 },
+  scroll: { flex: 1, backgroundColor: BG },
+  scrollContent: { paddingTop: 16 },
 
-  /* Stats */
-  statsRow: { flexDirection: "row", columnGap: 12 },
-  tile: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1.5,
-    ...cardShadow,
-  },
-  tileHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  tileIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tileBadge: {
-    color: "#E5E7EB",
-    fontWeight: "800",
-    backgroundColor: "#FFFFFF10",
-    borderColor: "#FFFFFF20",
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  statValue: { color: "#F1F5F9", fontWeight: "900", fontSize: 22 },
-
-  /* Sections */
-  section: {
-    fontSize: 16,
+  sectionTitle: {
+    color: "#111827",
     fontWeight: "900",
-    marginTop: 4,
-    color: "#F1F5F9",
+    marginBottom: 12,
   },
 
-  /* Path card */
-  pathCard: {
-    borderRadius: 16,
-    backgroundColor: "#0B1220",
-    borderWidth: 1.5,
-    borderColor: "#28356E",
-    padding: 14,
-    rowGap: 10,
-    ...cardShadow,
-  },
-  pathTitle: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#E5E7EB",
-  },
-  pathNextRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    columnGap: 8,
-    marginTop: 6,
-  },
-  pathDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: "#4F46E5",
-    marginTop: 4,
-  },
-  pathNextLabel: {
-    fontSize: 12,
-    color: "#9CA3AF",
-  },
-  pathNextLesson: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#E0E7FF",
-    marginTop: 2,
-  },
-  pathStepsTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#CBD5F5",
-    marginTop: 6,
-  },
-  pathStepsList: {
-    marginTop: 2,
-    rowGap: 2,
-  },
-  pathStepText: {
-    fontSize: 12,
-    color: "#9CA3AF",
-  },
-  pathButton: {
-    marginTop: 10,
-    alignSelf: "flex-start",
-    backgroundColor: "#4F46E5",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  pathButtonText: {
-    color: "#EEF2FF",
-    fontWeight: "800",
-    fontSize: 13,
-  },
-
-  /* Actions */
-  actionGrid: {
+  grid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    rowGap: 12,
-  },
-  actionTile: {
-    width: "48%",
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderWidth: 1.5,
-    alignItems: "center",
-    ...cardShadow,
-  },
-  actionLbl: {
-    color: "#F1F5F9",
-    fontWeight: "800",
-    textAlign: "center",
-    marginTop: 8,
-  },
-  actionSub: {
-    color: "#9CA3AF",
-    fontSize: 11,
-    textAlign: "center",
-    marginTop: 4,
+    rowGap: 14,
   },
 
-  /* Recent */
-  recentCard: {
-    backgroundColor: "#0B1220",
+  card: {
+    width: "48%",
+    backgroundColor: "rgba(255,255,255,0.92)",
     borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "#28356E",
-    minHeight: 84,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    ...cardShadow,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+    shadowColor: "#000",
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  recentBody: {
-    rowGap: 4,
+
+  cardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "rgba(47,107,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
   },
-  recentLine: {
-    color: "#C7D2FE",
-    fontSize: 13,
+
+  cardTitle: {
+    color: "#111827",
+    fontWeight: "900",
+    fontSize: 14,
   },
-  recentEmpty: { color: "#C7D2FE" },
+  cardSub: {
+    color: "rgba(17,24,39,0.70)",
+    fontWeight: "700",
+    marginTop: 4,
+    fontSize: 12,
+  },
 });

@@ -1,0 +1,230 @@
+import React from "react";
+import { View, Text, StyleSheet, Pressable, Dimensions } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+
+export type NodeKind = "check" | "book" | "game" | "trophy";
+
+export type PathNode = {
+  id: string;
+  order: number;
+  kind: NodeKind;
+  unlocked: boolean;
+  completed: boolean;
+  isCurrent?: boolean;
+};
+
+export type Unit = {
+  id: string;
+  title: string; // "Unit 1"
+  unlocked: boolean;
+  nodes: PathNode[];
+};
+
+type Props = {
+  units: Unit[];
+  onPressNode?: (node: PathNode) => void;
+  onPressSneakPeek?: (unit: Unit) => void;
+};
+
+const BLUE = "#2F6BFF";
+const BLUE_DARK = "#2558D8";
+const BG = "#EEF4FF";
+const GREEN = "#25C05A";
+
+export default function LearningPath({ units, onPressNode, onPressSneakPeek }: Props) {
+  const { width } = Dimensions.get("window");
+  const isTablet = width >= 900;
+
+  return (
+    <View style={[styles.wrap, { maxWidth: 1200 }]}>
+      {units.map((unit, idx) => (
+        <View key={unit.id} style={[styles.unitBlock, idx > 0 && { marginTop: isTablet ? 80 : 60 }]}>
+          {/* Unit header */}
+          <View style={styles.unitHeader}>
+            {unit.unlocked ? (
+              <View style={[styles.unitPill, { backgroundColor: GREEN }]}>
+                <Text style={styles.unitPillText}>{unit.title}</Text>
+              </View>
+            ) : (
+              <View style={styles.sneakRow}>
+                <View style={[styles.unitPill, { backgroundColor: "#9AA3AF" }]}>
+                  <Text style={styles.unitPillText}>{unit.title}</Text>
+                </View>
+
+                <Pressable style={styles.sneakBtn} onPress={() => onPressSneakPeek?.(unit)}>
+                  <Ionicons name="eye-outline" size={isTablet ? 18 : 16} color="#fff" />
+                  <Text style={[styles.sneakText, { fontSize: isTablet ? 15 : 13 }]}>Sneak Peek</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+
+          {/* Path row */}
+          <View style={styles.row}>
+            {unit.nodes.map((node, i) => {
+              const showConnector = i < unit.nodes.length - 1;
+              const unlocked = node.unlocked;
+
+              return (
+                <View key={node.id} style={styles.nodeSlot}>
+                  <Pressable
+                    onPress={() => unlocked && onPressNode?.(node)}
+                    style={[
+                      styles.node,
+                      unlocked ? styles.nodeBlue : styles.nodeLocked,
+                      node.completed ? styles.nodeCompleted : null,
+                      node.isCurrent ? styles.nodeCurrent : null,
+                      { width: isTablet ? 92 : 74, height: isTablet ? 92 : 74 },
+                    ]}
+                  >
+                    {renderIcon(node, isTablet)}
+                    <View
+                      style={[
+                        styles.badge,
+                        unlocked ? styles.badgeBlue : styles.badgeGray,
+                        { width: isTablet ? 30 : 26, height: isTablet ? 30 : 26 },
+                      ]}
+                    >
+                      <Text style={[styles.badgeText, { fontSize: isTablet ? 12 : 11 }]}>{node.order}</Text>
+                    </View>
+                  </Pressable>
+
+                  {showConnector && (
+                    <View
+                      style={[
+                        styles.connector,
+                        unlocked ? styles.connectorBlue : styles.connectorGray,
+                        { width: isTablet ? 84 : 64, height: isTablet ? 8 : 6, marginHorizontal: isTablet ? 12 : 10 },
+                      ]}
+                    />
+                  )}
+
+                  {node.isCurrent && <View style={styles.currentDrop} />}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function renderIcon(node: PathNode, isTablet: boolean) {
+  const size = isTablet ? 34 : 28;
+
+  if (!node.unlocked) {
+    return <Ionicons name="lock-closed-outline" size={size} color="rgba(255,255,255,0.88)" />;
+  }
+
+  if (node.completed || node.kind === "check") {
+    return <Ionicons name="checkmark-circle-outline" size={size} color="#fff" />;
+  }
+
+  if (node.kind === "book") return <Ionicons name="book-outline" size={size} color="#fff" />;
+  if (node.kind === "game") return <Ionicons name="game-controller-outline" size={size} color="#fff" />;
+  if (node.kind === "trophy") return <Ionicons name="trophy-outline" size={size} color="#fff" />;
+
+  return <Ionicons name="ellipse-outline" size={size} color="#fff" />;
+}
+
+const styles = StyleSheet.create({
+  wrap: { width: "100%", alignItems: "center", backgroundColor: BG },
+
+  unitBlock: { width: "100%", alignItems: "center" },
+  unitHeader: { width: "100%", alignItems: "center", marginBottom: 22 },
+
+  unitPill: {
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 999,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  unitPillText: { color: "#fff", fontWeight: "900", fontSize: 16 },
+
+  sneakRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  sneakBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: BLUE,
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 7,
+  },
+  sneakText: { color: "#fff", fontWeight: "900" },
+
+  row: {
+    width: "100%",
+    justifyContent: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  nodeSlot: { flexDirection: "row", alignItems: "center" },
+
+  node: {
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+    position: "relative",
+  },
+  nodeBlue: { backgroundColor: BLUE, borderWidth: 4, borderColor: "rgba(255,255,255,0.35)" },
+  nodeLocked: {
+    backgroundColor: "#D7DDE6",
+    borderWidth: 4,
+    borderColor: "rgba(255,255,255,0.75)",
+    opacity: 0.95,
+  },
+  nodeCompleted: { backgroundColor: BLUE },
+  nodeCurrent: { backgroundColor: BLUE_DARK, borderColor: "rgba(47,107,255,0.55)" },
+
+  badge: {
+    position: "absolute",
+    bottom: -10,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 3,
+    borderColor: "#fff",
+  },
+  badgeBlue: { backgroundColor: BLUE },
+  badgeGray: { backgroundColor: "#8B95A5" },
+  badgeText: { color: "#fff", fontWeight: "900" },
+
+  connector: {
+    borderRadius: 999,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  connectorBlue: { backgroundColor: "rgba(47,107,255,0.55)" },
+  connectorGray: { backgroundColor: "rgba(160,170,185,0.55)" },
+
+  currentDrop: {
+    position: "absolute",
+    left: "50%",
+    transform: [{ translateX: -2 }],
+    bottom: -88,
+    width: 4,
+    height: 72,
+    borderRadius: 999,
+    backgroundColor: "rgba(47,107,255,0.75)",
+  },
+});
