@@ -131,7 +131,7 @@ npx expo run:android
 Place your quantized model :
 
 ```
-Gemma-3 1B (local LLM)
+TBD
 ```
 
 inside:
