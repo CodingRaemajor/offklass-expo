@@ -27,7 +27,7 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="offklass"/>
-        <data android:scheme="exp+offklass-expo"/>
+        <data android:scheme="exp+offklass"/>
       </intent-filter>
     </activity>
   </application>

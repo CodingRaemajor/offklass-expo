@@ -1,16 +1,22 @@
-import React, { useState, useEffect, useMemo } from "react";
+// app/(tabs)/lessons.tsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
+  Dimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import Chip from "../../components/Chip";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
 import { Video, ResizeMode } from "expo-av";
+import { router, useLocalSearchParams } from "expo-router";
+
+import Chip from "../../components/Chip";
+import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
+import { Colors } from "../../lib/colors";
 
 /* ----------------------------- Subjects & Units ----------------------------- */
 
@@ -43,7 +49,8 @@ const UNIT_DESCRIPTIONS: Record<Subject, UnitDescription[]> = {
     {
       unit: "Unit 1: Place Value",
       title: "Unit 1: Place Value",
-      description: "Learn about place value, comparing numbers, and understanding digits in different positions.",
+      description:
+        "Learn about place value, comparing numbers, and understanding digits in different positions.",
       status: "available",
     },
     {
@@ -55,7 +62,8 @@ const UNIT_DESCRIPTIONS: Record<Subject, UnitDescription[]> = {
     {
       unit: "Unit 3: Multiplication",
       title: "Unit 3: Multiplication",
-      description: "Understand multiplication concepts, times tables, and solving multiplication problems.",
+      description:
+        "Understand multiplication concepts, times tables, and solving multiplication problems.",
       status: "coming-soon",
     },
     {
@@ -67,7 +75,8 @@ const UNIT_DESCRIPTIONS: Record<Subject, UnitDescription[]> = {
     {
       unit: "Unit 5: Fractions",
       title: "Unit 5: Fractions",
-      description: "Explore fractions, their parts, comparing fractions, and basic fraction operations.",
+      description:
+        "Explore fractions, their parts, comparing fractions, and basic fraction operations.",
       status: "coming-soon",
     },
   ],
@@ -133,15 +142,18 @@ const L10N: Record<
     subtitle: string;
     subjects: Record<Subject, string>;
     units: Record<Unit, string>;
-    unitLabel: string;
-    allUnits: string;
     comingSoon: string;
     tapToPlay: string;
+    back: string;
+
+    // list labels (optional)
+    unitsHeading: string;
+    videosHeading: string;
   }
 > = {
   English: {
     title: "Lessons",
-    subtitle: "Watch short videos by unit.",
+    subtitle: "Pick a unit and watch videos.",
     subjects: { Math: "Math" },
     units: {
       "All Units": "All Units",
@@ -151,14 +163,15 @@ const L10N: Record<
       "Unit 4: Division": "Unit 4: Division",
       "Unit 5: Fractions": "Unit 5: Fractions",
     },
-    unitLabel: "Unit",
-    allUnits: "All Units",
     comingSoon: "Coming Soon",
     tapToPlay: "Tap to play",
+    back: "Back",
+    unitsHeading: "Units",
+    videosHeading: "Videos",
   },
   नेपाली: {
     title: "पाठहरू",
-    subtitle: "इकाई अनुसार छोटा भिडियोहरू।",
+    subtitle: "इकाई छान्नुहोस् र भिडियो हेर्नुहोस्।",
     subjects: { Math: "गणित" },
     units: {
       "All Units": "सबै इकाई",
@@ -168,14 +181,15 @@ const L10N: Record<
       "Unit 4: Division": "इकाई ४: भाग",
       "Unit 5: Fractions": "इकाई ५: भिन्न",
     },
-    unitLabel: "इकाई",
-    allUnits: "सबै इकाई",
     comingSoon: "छिट्टै आउँदैछ",
     tapToPlay: "खेल्न ट्याप गर्नुहोस्",
+    back: "फर्कनुहोस्",
+    unitsHeading: "इकाईहरू",
+    videosHeading: "भिडियोहरू",
   },
   اردو: {
     title: "اسباق",
-    subtitle: "یونٹ کے مطابق مختصر ویڈیوز۔",
+    subtitle: "یونٹ منتخب کریں اور ویڈیوز دیکھیں۔",
     subjects: { Math: "ریاضی" },
     units: {
       "All Units": "تمام اکائیاں",
@@ -185,14 +199,15 @@ const L10N: Record<
       "Unit 4: Division": "یونٹ ٤: تقسیم",
       "Unit 5: Fractions": "یونٹ ٥: کسور",
     },
-    unitLabel: "یونٹ",
-    allUnits: "تمام اکائیاں",
     comingSoon: "جلد آرہا ہے",
     tapToPlay: "چلانے کے لیے ٹیپ کریں",
+    back: "واپس",
+    unitsHeading: "یونٹس",
+    videosHeading: "ویڈیوز",
   },
   বাংলা: {
     title: "পাঠসমূহ",
-    subtitle: "ইউনিট অনুযায়ী ছোট ভিডিও।",
+    subtitle: "ইউনিট বাছুন এবং ভিডিও দেখুন।",
     subjects: { Math: "গণিত" },
     units: {
       "All Units": "সমস্ত ইউনিট",
@@ -202,14 +217,15 @@ const L10N: Record<
       "Unit 4: Division": "ইউনিট ৪: ভাগ",
       "Unit 5: Fractions": "ইউনিট ৫: ভগ্নাংশ",
     },
-    unitLabel: "ইউনিট",
-    allUnits: "সমস্ত ইউনিট",
     comingSoon: "শীঘ্রই আসছে",
     tapToPlay: "চালাতে ট্যাপ করুন",
+    back: "ফিরে যান",
+    unitsHeading: "ইউনিট",
+    videosHeading: "ভিডিও",
   },
   हिन्दी: {
     title: "पाठ",
-    subtitle: "इकाई के अनुसार छोटे वीडियो।",
+    subtitle: "इकाई चुनें और वीडियो देखें।",
     subjects: { Math: "गणित" },
     units: {
       "All Units": "सभी इकाइयाँ",
@@ -219,118 +235,235 @@ const L10N: Record<
       "Unit 4: Division": "इकाई ४: भाग",
       "Unit 5: Fractions": "इकाई ५: भिन्न",
     },
-    unitLabel: "इकाई",
-    allUnits: "सभी इकाइयाँ",
     comingSoon: "जल्द आ रहा है",
     tapToPlay: "चलाने के लिए टैप करें",
+    back: "वापस",
+    unitsHeading: "इकाइयाँ",
+    videosHeading: "वीडियो",
   },
 };
 
-/* ------------------------------ Unit Description Card ----------------------------- */
+/* ----------------------------- Subcomponents ------------------------------ */
 
-interface UnitDescriptionCardProps {
-  unitDesc: UnitDescription;
-  T: (typeof L10N)[Lang];
+function SoftHeaderCard({
+  title,
+  subtitle,
+  rtl,
+}: {
+  title: string;
+  subtitle: string;
   rtl?: { writingDirection: "rtl"; textAlign: "right" };
-}
-
-function UnitDescriptionCard({ unitDesc, T, rtl, onPress }: UnitDescriptionCardProps & { onPress: () => void }) {
+}) {
   return (
-    <TouchableOpacity 
-      style={styles.unitCard}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.unitHeader}>
-        <Text style={[styles.unitTitle, rtl]}>{unitDesc.title}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {unitDesc.status === "coming-soon" && (
-            <View style={styles.comingSoonBadge}>
-              <Text style={styles.comingSoonText}>{T.comingSoon}</Text>
-            </View>
-          )}
-          <Ionicons name="chevron-forward" size={20} color={UI.accent} />
-        </View>
-      </View>
-      <Text style={[styles.unitDescription, rtl]}>{unitDesc.description}</Text>
-    </TouchableOpacity>
+    <View style={styles.headerCard}>
+      <Text style={[styles.headerTitle, rtl]}>{title}</Text>
+      <Text style={[styles.headerSub, rtl]}>{subtitle}</Text>
+    </View>
   );
 }
 
-/* ------------------------------ Lesson Card UI ----------------------------- */
+function UnitTile({
+  unitDesc,
+  T,
+  rtl,
+  onPress,
+}: {
+  unitDesc: UnitDescription;
+  T: (typeof L10N)[Lang];
+  rtl?: { writingDirection: "rtl"; textAlign: "right" };
+  onPress: () => void;
+}) {
+  const isComingSoon = unitDesc.status === "coming-soon";
 
-interface VideoLessonCardProps {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.tile,
+        pressed && { transform: [{ scale: 0.99 }], opacity: 0.97 },
+      ]}
+    >
+      <View style={styles.tileIcon}>
+        <Ionicons name="grid-outline" size={22} color={UI.blue} />
+      </View>
+
+      <Text style={[styles.tileTitle, rtl]} numberOfLines={2}>
+        {unitDesc.title}
+      </Text>
+
+      <Text style={[styles.tileSub, rtl]} numberOfLines={2}>
+        {unitDesc.description}
+      </Text>
+
+      <View style={styles.tileFooter}>
+        {isComingSoon ? (
+          <View style={styles.comingSoonBadge}>
+            <Text style={styles.comingSoonText}>{T.comingSoon}</Text>
+          </View>
+        ) : (
+          <View />
+        )}
+
+        <Ionicons name="chevron-forward" size={18} color={UI.muted} />
+      </View>
+    </Pressable>
+  );
+}
+
+function LessonTile({
+  lesson,
+  rtl,
+  onPress,
+}: {
+  lesson: VideoLesson;
+  rtl?: { writingDirection: "rtl"; textAlign: "right" };
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.tile,
+        pressed && { transform: [{ scale: 0.99 }], opacity: 0.97 },
+      ]}
+    >
+      <View style={styles.tileIcon}>
+        <Ionicons name="play-circle-outline" size={24} color={UI.blue} />
+      </View>
+
+      <Text style={[styles.tileTitle, rtl]} numberOfLines={2}>
+        {lesson.title}
+      </Text>
+
+      <Text style={[styles.tileSub, rtl]} numberOfLines={2}>
+        {lesson.description}
+      </Text>
+
+      <View style={styles.tileFooter}>
+        <View style={styles.pill}>
+          <Text style={styles.pillText} numberOfLines={1}>
+            {lesson.topic}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={UI.muted} />
+      </View>
+    </Pressable>
+  );
+}
+
+/* ------------------------------ Player View (Home-like UI, no progress) ----------------------------- */
+
+function LessonPlayer({
+  lesson,
+  T,
+  rtl,
+  isTablet,
+  paddingX,
+}: {
   lesson: VideoLesson;
   T: (typeof L10N)[Lang];
   rtl?: { writingDirection: "rtl"; textAlign: "right" };
-}
+  isTablet: boolean;
+  paddingX: number;
+}) {
+  const videoRef = useRef<Video>(null);
 
-function VideoLessonCard({ lesson, T, rtl }: VideoLessonCardProps) {
-  const [showVideo, setShowVideo] = useState(false);
-  const videoRef = React.useRef<Video>(null);
-
-  // Play AFTER mount (Android fix)
-  useEffect(() => {
-    if (showVideo) {
-      setTimeout(() => {
-        videoRef.current?.playAsync();
-      }, 100);
-    }
-  }, [showVideo]);
+  // Always mount video (Android tablet fix)
+  const [shouldPlay, setShouldPlay] = useState(false);
 
   return (
-    <View style={styles.card}>
-      <View style={styles.thumbWrap}>
-        {showVideo ? (
-          <Video
-            ref={videoRef}
-            source={lesson.source}
-            style={styles.thumb}
-            useNativeControls
-            resizeMode={ResizeMode.CONTAIN}
-          />
-        ) : (
-          <TouchableOpacity
-            style={styles.thumbPlaceholder}
-            activeOpacity={0.85}
-            onPress={() => setShowVideo(true)}
-          >
-            <Ionicons name="play" size={28} color="#FFF" />
-            <Text style={styles.thumbPlaceholderText}>
-              {T.tapToPlay}
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[
+        styles.scrollContent,
+        {
+          paddingHorizontal: paddingX,
+          paddingTop: 16,
+          paddingBottom: 24,
+        },
+      ]}
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+      overScrollMode="never"
+    >
+      <Pressable
+        onPress={() => router.replace({ pathname: "/tabs/lessons", params: {} })}
+        style={({ pressed }) => [
+          styles.backPill,
+          pressed && { transform: [{ scale: 0.99 }], opacity: 0.96 },
+        ]}
+      >
+        <Ionicons name="chevron-back" size={18} color={UI.text} />
+        <Text style={[styles.backPillText, rtl]}>{T.back}</Text>
+      </Pressable>
+
+      <View style={styles.playerHeaderCard}>
+        <View style={styles.playerBadgesRow}>
+          <View style={styles.playerBadge}>
+            <Text style={styles.playerBadgeText} numberOfLines={1}>
+              {lesson.unit}
             </Text>
-
-            <View style={styles.playFab}>
-              <Ionicons name="play" size={18} color="#FFF" />
-            </View>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <View style={styles.cardContent}>
-        <Text style={[styles.cardTitle, rtl]} numberOfLines={2}>
-          {lesson.title}
-        </Text>
-        <Text style={[styles.cardDescription, rtl]} numberOfLines={3}>
-          {lesson.description}
-        </Text>
-
-        <View style={styles.cardFooter}>
-          <Text style={[styles.cardTopic, rtl]}>Topic:</Text>
-          <View style={styles.topicPill}>
-            <Text style={styles.topicPillText} numberOfLines={1}>
+          </View>
+          <View style={styles.playerBadge}>
+            <Text style={styles.playerBadgeText} numberOfLines={1}>
               {lesson.topic}
             </Text>
           </View>
         </View>
+
+        <Text style={[styles.playerTitle, rtl]} numberOfLines={2}>
+          {lesson.title}
+        </Text>
+        <Text style={[styles.playerSub, rtl]} numberOfLines={3}>
+          {lesson.description}
+        </Text>
       </View>
-    </View>
+
+      <View style={[styles.videoCard, isTablet && { borderRadius: 18 }]}>
+        <View style={styles.videoWrap}>
+          <Video
+            ref={videoRef}
+            source={lesson.source}
+            style={styles.video}
+            useNativeControls
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay={shouldPlay}
+          />
+
+          {!shouldPlay && (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.videoOverlay}
+              onPress={() => {
+                setShouldPlay(true);
+                setTimeout(() => {
+                  videoRef.current?.playAsync();
+                }, 120);
+              }}
+            >
+              <View style={styles.playCenter}>
+                <Ionicons name="play" size={34} color={UI.blue} />
+              </View>
+              <Text style={styles.tapText}>{T.tapToPlay}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
 /* ----------------------------------- Screen ---------------------------------- */
 
+const BG = "#EEF4FF"; // match home.tsx
+
 export default function Lessons() {
+  const insets = useSafeAreaInsets();
+  const { width } = Dimensions.get("window");
+  const isTablet = width >= 900;
+
+  const params = useLocalSearchParams<{ lessonId?: string }>();
+
   const [subject, setSubject] = useState<Subject>("Math");
   const [unit, setUnit] = useState<Unit>(UNITS["Math"][0]);
   const [lang, setLang] = useState<Lang>("English");
@@ -353,228 +486,336 @@ export default function Lessons() {
       })
     : undefined;
 
+  const paddingX = isTablet ? 28 : 16;
+
+  const selectedLesson = useMemo(() => {
+    const all = VIDEO_LESSONS[subject];
+    if (!params.lessonId) return null;
+    return all.find((x) => x.id === params.lessonId) ?? null;
+  }, [params.lessonId, subject]);
+
+  // Player view
+  if (selectedLesson) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+        <LessonPlayer
+          lesson={selectedLesson}
+          T={T}
+          rtl={rtl}
+          isTablet={isTablet}
+          paddingX={paddingX}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // List view
   const showAllUnits = unit === "All Units";
-  const filteredLessons = showAllUnits
-    ? []
-    : VIDEO_LESSONS[subject].filter((lesson) => lesson.unit === unit);
+  const filteredLessons = showAllUnits ? [] : VIDEO_LESSONS[subject].filter((l) => l.unit === unit);
 
   return (
-    <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ padding: 16, paddingBottom: 28 }}
-        overScrollMode="never"
-      >
-        {/* Header */}
-        <View style={styles.headerCard}>
-          <Text style={[styles.title, rtl]}>{T.title}</Text>
-          <Text style={[styles.subtitle, rtl]}>{T.subtitle}</Text>
-        </View>
-
-        {/* Subject chips */}
-        <View style={styles.subRow}>
-          {SUBJECTS.map((s) => (
-            <View key={s} style={{ flex: 1 }}>
-              <Chip
-                label={T.subjects[s]}
-                active={s === subject}
-                onPress={() => {
-                  setSubject(s);
-                  setUnit(UNITS[s][0]);
-                }}
-                style={{ justifyContent: "center", alignItems: "center" }}
-              />
-            </View>
-          ))}
-        </View>
-
-        {/* Unit chips */}
+    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+      <View style={styles.container}>
         <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingBottom: Math.max(16, insets.bottom + 16),
+              paddingHorizontal: paddingX,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
         >
-          {UNITS[subject].map((u) => (
-            <Chip
-              key={u}
-              label={T.units[u] ?? u}
-              active={u === unit}
-              onPress={() => setUnit(u)}
-            />
-          ))}
+          <SoftHeaderCard title={T.title} subtitle={T.subtitle} rtl={rtl} />
+
+          {/* Subject chips */}
+          <View style={styles.subRow}>
+            {SUBJECTS.map((s) => (
+              <View key={s} style={{ flex: 1 }}>
+                <Chip
+                  label={T.subjects[s]}
+                  active={s === subject}
+                  onPress={() => {
+                    setSubject(s);
+                    setUnit(UNITS[s][0]);
+                  }}
+                  style={{ justifyContent: "center", alignItems: "center" }}
+                />
+              </View>
+            ))}
+          </View>
+
+          {/* Unit chips */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+          >
+            {UNITS[subject].map((u) => (
+              <Chip
+                key={u}
+                label={T.units[u] ?? u}
+                active={u === unit}
+                onPress={() => setUnit(u)}
+              />
+            ))}
+          </ScrollView>
+
+          <View style={{ height: 14 }} />
+
+          {/* Tiles (Home-like cards) */}
+          <View style={styles.grid}>
+            {showAllUnits
+              ? UNIT_DESCRIPTIONS[subject].map((unitDesc) => (
+                  <UnitTile
+                    key={unitDesc.unit}
+                    unitDesc={unitDesc}
+                    T={T}
+                    rtl={rtl}
+                    onPress={() => setUnit(unitDesc.unit)}
+                  />
+                ))
+              : filteredLessons.map((lesson) => (
+                  <LessonTile
+                    key={lesson.id}
+                    lesson={lesson}
+                    rtl={rtl}
+                    onPress={() => {
+                      router.push({
+                        pathname: "/tabs/lessons",
+                        params: { lessonId: lesson.id },
+                      });
+                    }}
+                  />
+                ))}
+          </View>
         </ScrollView>
-
-        <View style={{ height: 10 }} />
-
-        {/* Content: either unit descriptions or lessons */}
-        <View style={{ gap: 12 }}>
-          {showAllUnits ? (
-            // Show all unit descriptions when "All Units" is selected
-            UNIT_DESCRIPTIONS[subject].map((unitDesc) => (
-              <UnitDescriptionCard
-                key={unitDesc.unit}
-                unitDesc={unitDesc}
-                T={T}
-                rtl={rtl}
-                onPress={() => setUnit(unitDesc.unit)}
-              />
-            ))
-          ) : (
-            // Show lessons for the selected unit
-            filteredLessons.map((lesson) => (
-              <VideoLessonCard
-                key={lesson.id}
-                lesson={lesson}
-                T={T}
-                rtl={rtl}
-              />
-            ))
-          )}
-        </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
-/* ----------------------------------- Styles ---------------------------------- */
+/* ----------------------------------- Colors ---------------------------------- */
 
 const UI = {
-  bg: "#0B0E14",
-  card: "#0F1421",
-  cardBorder: "#1C2740",
-  text: "#E6EAF2",
-  subtext: "#9AA5B1",
-  pill: "#111827",
-  pillBorder: "#22304A",
-  accent: "#7C3AED",
+  bg: BG,
+  text: "#111827",
+  muted: "rgba(17,24,39,0.65)",
+  card: "rgba(255,255,255,0.92)",
+  border: "rgba(0,0,0,0.06)",
+  shadow: "#000",
+
+  blue: "#2F6BFF", // same as Home action icons
+  blueSoft: "rgba(47,107,255,0.12)",
+
+  accent: Colors?.purple ?? "#7C3AED",
+
   comingSoon: "#F59E0B",
 };
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: UI.bg },
-  scroll: { flex: 1, backgroundColor: UI.bg },
+  safe: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: BG },
 
+  scroll: { flex: 1, backgroundColor: BG },
+  scrollContent: { paddingTop: 16 },
+
+  /* Header card (same feel as Home section) */
   headerCard: {
+    width: "100%",
     backgroundColor: UI.card,
     borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: UI.cardBorder,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 10,
+    borderColor: UI.border,
+    shadowColor: UI.shadow,
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  title: { color: UI.text, fontSize: 18, fontWeight: "800" },
-  subtitle: { color: UI.subtext, marginTop: 2 },
+  headerTitle: {
+    color: UI.text,
+    fontWeight: "900",
+    fontSize: 18,
+  },
+  headerSub: {
+    color: UI.muted,
+    fontWeight: "700",
+    marginTop: 4,
+    fontSize: 12.5,
+  },
 
   subRow: { flexDirection: "row", gap: 10, marginVertical: 12 },
 
-  // Unit description card
-  unitCard: {
-    backgroundColor: UI.card,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: UI.cardBorder,
-    padding: 16,
-  },
-  unitHeader: {
+  /* Grid like Home cards */
+  grid: {
     flexDirection: "row",
-    alignItems: "center",
+    flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  unitTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: UI.text,
-    flex: 1,
-  },
-  comingSoonBadge: {
-    backgroundColor: UI.comingSoon + "20",
-    borderColor: UI.comingSoon,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  comingSoonText: {
-    color: UI.comingSoon,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  unitDescription: {
-    color: UI.subtext,
-    fontSize: 13,
-    lineHeight: 18,
+    rowGap: 14,
   },
 
-  // Video lesson card
-  card: {
+  tile: {
+    width: "48%",
     backgroundColor: UI.card,
     borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1.5,
-    borderColor: UI.cardBorder,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-  },
-
-  thumbWrap: { width: "100%", aspectRatio: 16 / 9, position: "relative" },
-  thumb: { width: "100%", height: "100%" },
-
-  thumbPlaceholder: {
-    flex: 1,
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#111827",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  thumbPlaceholderText: {
-    marginTop: 6,
-    color: "#E6EAF2",
-    fontSize: 12,
-  },
-
-  playFab: {
-    position: "absolute",
-    right: 12,
-    bottom: 12,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: UI.accent,
-    alignItems: "center",
-    justifyContent: "center",
+    padding: 14,
     borderWidth: 1,
-    borderColor: "#4C2AC8",
+    borderColor: UI.border,
+    shadowColor: UI.shadow,
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
 
-  cardContent: { padding: 14 },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "800",
+  tileIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: UI.blueSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+
+  tileTitle: {
     color: UI.text,
-    marginBottom: 6,
+    fontWeight: "900",
+    fontSize: 14,
   },
-  cardDescription: { color: UI.subtext, fontSize: 13, marginBottom: 10 },
+  tileSub: {
+    color: UI.muted,
+    fontWeight: "700",
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+  },
 
-  cardFooter: {
+  tileFooter: {
+    marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
   },
-  cardTopic: { color: UI.subtext, fontSize: 12 },
 
-  topicPill: {
-    backgroundColor: UI.pill,
-    borderColor: UI.pillBorder,
+  comingSoonBadge: {
+    backgroundColor: "rgba(245,158,11,0.14)",
+    borderColor: "rgba(245,158,11,0.35)",
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
   },
-  topicPillText: { color: UI.text, fontSize: 12, fontWeight: "700" },
+  comingSoonText: {
+    color: "#B45309",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+
+  pill: {
+    backgroundColor: "rgba(47,107,255,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(47,107,255,0.20)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: 170,
+  },
+  pillText: {
+    color: UI.text,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+
+  /* Player */
+  backPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: UI.card,
+    borderWidth: 1,
+    borderColor: UI.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    shadowColor: UI.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+    marginBottom: 12,
+  },
+  backPillText: {
+    color: UI.text,
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
+  playerHeaderCard: {
+    backgroundColor: UI.card,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: UI.border,
+    shadowColor: UI.shadow,
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+    marginBottom: 12,
+  },
+
+  playerBadgesRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  playerBadge: {
+    backgroundColor: UI.blueSoft,
+    borderWidth: 1,
+    borderColor: "rgba(47,107,255,0.18)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  playerBadgeText: { color: UI.text, fontSize: 11, fontWeight: "900" },
+
+  playerTitle: { color: UI.text, fontSize: 18, fontWeight: "900", marginBottom: 6 },
+  playerSub: { color: UI.muted, fontSize: 12.5, fontWeight: "700", lineHeight: 17 },
+
+  videoCard: {
+    backgroundColor: UI.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: UI.border,
+    overflow: "hidden",
+    shadowColor: UI.shadow,
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  videoWrap: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#DDE7FF" },
+  video: { width: "100%", height: "100%" },
+
+  videoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.35)",
+  },
+  playCenter: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "rgba(47,107,255,0.35)",
+  },
+  tapText: { marginTop: 10, color: UI.muted, fontSize: 12, fontWeight: "800" },
 });

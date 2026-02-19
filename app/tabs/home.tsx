@@ -8,7 +8,6 @@ import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
 import { getHomeSnapshot } from "../../lib/progress";
 
 import DashboardHeader from "../../components/offklass/DashboardHeader";
-import StudentVector from "../../components/offklass/StudentVector";
 
 /* ------------------------------- i18n helpers ------------------------------ */
 
@@ -191,9 +190,7 @@ export default function Home() {
           </View>
 
           {/* remaining space */}
-          <View style={{ marginTop: 18 }}>
-            <StudentVector height={isTablet ? 320 : 240} />
-          </View>
+
         </ScrollView>
       </View>
     </SafeAreaView>
