@@ -1,9 +1,6 @@
 // lib/ai.local.ts
-// Offklass AI Runner: Gemma-3-3B ONLY (Q4)
-// Tuned for stability on Android tablets
-
 import { initLlama, type LlamaContext } from "llama.rn";
-import { ensureModel, isModelDownloaded } from "./LocalModel";
+import { ensureModel, isModelDownloaded, type ModelChoice } from "./LocalModel";
 import Constants from "expo-constants";
 
 export type Message = {
@@ -13,9 +10,10 @@ export type Message = {
 };
 
 let ctx: LlamaContext | null = null;
+let loadedModel: ModelChoice | null = null;
 let inflight: Promise<Message> | null = null;
 
-/* ------------------ REFINED TEACHER PROMPT ------------------ */
+/* ------------------ REFINED TEACHER PROMPT (ORIGINAL) ------------------ */
 
 const SYSTEM_PROMPT = `
 You are Offklass AI.
@@ -95,174 +93,206 @@ Before answering, check:
 
 /* ------------------ HELPERS ------------------ */
 
-function isGreeting(text: string): boolean {
-  const t = text.trim().toLowerCase();
-  return ["hi", "hello", "hey", "hii", "sup"].some(
-    (g) => t === g || t.startsWith(g + " ")
-  );
-}
-
 function formatMessagesForGemma(messages: Message[]): string {
   let out = "<bos>";
-  // Put system rules at the very start (forces strong instruction following)
   out += `<start_of_turn>user\n${SYSTEM_PROMPT}<end_of_turn>\n`;
-
   for (const msg of messages) {
     if (msg.role === "system") continue;
     const role = msg.role === "user" ? "user" : "model";
     out += `<start_of_turn>${role}\n${msg.content}<end_of_turn>\n`;
   }
-
   out += "<start_of_turn>model\n";
   return out;
 }
 
-/* ------------------ ENGINE MANAGEMENT ------------------ */
-
-async function getContext(): Promise<LlamaContext> {
-  if (Constants.appOwnership === "expo") {
-    throw new Error("Local AI requires a Development Build.");
-  }
-
-  if (ctx) return ctx;
-
+async function getContext(choice: ModelChoice = "gemma2b"): Promise<LlamaContext> {
+  if (Constants.appOwnership === "expo") throw new Error("Local AI requires a Development Build.");
+  if (ctx && loadedModel === choice) return ctx;
   const modelPath = await ensureModel();
-
-  // Create context (Gemma 3B tuned)
+  if (ctx) { try { await ctx.release(); } catch {} } 
   ctx = await initLlama({
     model: modelPath,
-
-    // 3B is heavier: start lower for stability.
-    // If device is strong, you can raise to 2048 later.
-    n_ctx: 1536,
-
-    // Threads: 4 is safe on most mid devices.
-    // If tablet is strong you can try 6-8.
+    n_ctx: 2048,
     n_threads: 4,
-
-    // Usually keep GPU off on Android unless you know it supports it well.
-    n_gpu_layers: 0,
-
-    // mlock can crash on some devices due to memory pressure.
-    // Keep false for stability.
-    use_mlock: false,
+    use_mlock: true,
   });
-
+  loadedModel = choice;
   return ctx;
 }
 
-/* ------------------ MAIN CALL ------------------ */
+/* ------------------ QUIZ GENERATION ------------------ */
 
-function looksIncomplete(out: string): boolean {
-  const t = out.trim();
-  // Basic “did we at least reach Answer:” check
-  if (!t.toLowerCase().includes("answer:")) return true;
+export interface GeneratedQuestion {
+  id: number;
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  topic: string;
+  explanation: string;
+}
 
-  // If it ends mid-word or mid-line, treat as cut
-  if (/[a-zA-Z0-9]$/.test(t) && !t.endsWith(".") && !t.endsWith("!") && !t.endsWith("?")) {
-    // not perfect, but helps catch abrupt stops
-    return true;
+const QUIZ_GENERATION_PROMPT = `
+You are Offklass AI. Create 5 multiple choice questions for Grade 2.
+Use the transcript to create REAL math options.
+
+### GOOD EXAMPLE TO FOLLOW ###
+Question: In the number 47, what does the 4 represent?
+A: 4 ones
+B: 4 tens
+C: 7 tens
+D: 400
+Answer: 4 tens
+Explanation: The 4 is in the tens place, so it represents 4 tens.
+
+### RULES ###
+1. Options must be specific values (like "40" or "7 ones"), NOT just "1, 2, 3, 4".
+2. The "Answer" must be the text of the correct option.
+3. Keep it very simple.
+
+Transcript:
+`;
+
+export async function generateQuizFromTranscript(transcript: string, lessonTitle: string, topic: string): Promise<GeneratedQuestion[]> {
+  try {
+    const engine = await getContext("gemma2b");
+    const prompt = QUIZ_GENERATION_PROMPT + transcript + "\n\nGenerate 5 questions:";
+    
+const { text } = await engine.completion({
+  prompt: formatMessagesForGemma([{ id: "1", role: "user", content: prompt }]),
+  n_predict: 1000,
+  temperature: 0.0, // Force the AI to be literal/less creative
+  top_p: 0.1,
+});
+
+    // DEBUG: Look at your terminal to see if the AI is actually talking
+    console.log("--- AI RAW RESPONSE START ---");
+    console.log(text);
+    console.log("--- AI RAW RESPONSE END ---");
+
+    return parseQuizResponse(text.trim(), lessonTitle, topic);
+  } catch (err) {
+    console.error("Quiz generation error:", err);
+    return [];
   }
+}
 
-  return false;
+function parseQuizResponse(response: string, lessonTitle: string, topic: string): GeneratedQuestion[] {
+  const questions: GeneratedQuestion[] = [];
+  
+  // 1. CLEAN THE TEXT: Remove all bold stars (**) and numbers from "Question 1:"
+  // This turns "**Question 1: Text**" into "Question: Text"
+  const cleanResponse = response
+    .replace(/\*\*/g, "")                   // Remove bold stars
+    .replace(/Question\s*\d+:/gi, "Question:"); // Standardize "Question 1:", "Question 2:" to "Question:"
+
+  // 2. Split by "Question:"
+  const rawBlocks = cleanResponse.split(/Question:/i).filter(b => b.trim().length > 10);
+  
+  rawBlocks.forEach((block, index) => {
+    try {
+      const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      
+      const questionText = lines[0]; 
+      
+      // Use flexible Regex to find options, ignoring any remaining punctuation
+      const optA = lines.find(l => /^A[:\s.-]/i.test(l))?.replace(/^A[:\s.-]/i, "").trim();
+      const optB = lines.find(l => /^B[:\s.-]/i.test(l))?.replace(/^B[:\s.-]/i, "").trim();
+      const optC = lines.find(l => /^C[:\s.-]/i.test(l))?.replace(/^C[:\s.-]/i, "").trim();
+      const optD = lines.find(l => /^D[:\s.-]/i.test(l))?.replace(/^D[:\s.-]/i, "").trim();
+      
+      // Find Answer/Correct line
+      const answerLine = lines.find(l => /^(Answer|Correct|Correct Answer)[:\s.-]/i.test(l))
+        ?.replace(/^(Answer|Correct|Correct Answer)[:\s.-]/i, "").trim();
+        
+      const explanation = lines.find(l => /^Explanation[:\s.-]/i.test(l))
+        ?.replace(/^Explanation[:\s.-]/i, "").trim();
+
+      if (questionText && optA && optB && optC && optD && answerLine) {
+        const options = [optA, optB, optC, optD];
+
+        // 3. SMART ANSWER MATCHING
+        // AI often writes "Answer: B: 5 tens". We need to find "5 tens" or the letter "B"
+        let correctIndex = -1;
+
+        // Try matching the text first (highest accuracy)
+        correctIndex = options.findIndex(opt => 
+          answerLine.toLowerCase().includes(opt.toLowerCase()) || 
+          opt.toLowerCase().includes(answerLine.toLowerCase())
+        );
+
+        // Fallback: Try matching the letter (A, B, C, D)
+        if (correctIndex === -1) {
+          const firstChar = answerLine.charAt(0).toUpperCase();
+          if (["A", "B", "C", "D"].includes(firstChar)) {
+            correctIndex = firstChar.charCodeAt(0) - 65;
+          }
+        }
+
+        if (correctIndex >= 0 && correctIndex <= 3) {
+          questions.push({
+            id: Date.now() + index,
+            question: questionText,
+            options,
+            correctAnswer: options[correctIndex],
+            topic,
+            explanation: explanation || "Keep up the great work!"
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Parse Error:", err);
+    }
+  });
+  
+  return questions;
+}
+/* ... CallAI and other functions stay exactly the same ... */
+
+function isGreeting(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  return ["hi", "hello", "hey", "hii", "sup"].some(g => t === g || t.startsWith(g + " "));
 }
 
 export async function callAI(history: Message[]): Promise<Message> {
-  if (inflight) {
-    return {
-      id: "busy",
-      role: "assistant",
-      content: "I'm still calculating...",
-    };
-  }
+  if (inflight) return { id: "busy", role: "assistant", content: "I'm still calculating..." };
 
-  const lastUser = [...history].reverse().find((m) => m.role === "user");
-
-  // Local Greeting Handler
+  const lastUser = [...history].reverse().find(m => m.role === "user");
+  
   if (lastUser && isGreeting(lastUser.content)) {
-    return {
-      id: "greet",
-      role: "assistant",
-      content: "Hi! I'm Offklass AI. Which math topic are we working on today?",
+    return { 
+      id: "greet", 
+      role: "assistant", 
+      content: "Hi! I'm Offklass AI. Which math topic are we working on today?" 
     };
   }
 
   inflight = (async () => {
     try {
-      const engine = await getContext();
-
-      // Keep recent history short (reduces stickiness + saves context)
-      const recentHistory = history.slice(-4);
-
-      const prompt = formatMessagesForGemma(recentHistory);
-
-      // First attempt
-      const first = await engine.completion({
-        prompt,
-        n_predict: 512,     // safer than 600 for 3B, reduces RAM spikes
-        temperature: 0.15,  // low for math correctness
-        top_p: 0.9,
+      const engine = await getContext("gemma2b");
+      const { text } = await engine.completion({
+        prompt: formatMessagesForGemma(history.slice(-4)),
+        n_predict: 600,
+        temperature: 0.1,
         stop: ["<end_of_turn>", "<eos>"],
       });
-
-      let text = (first.text ?? "").trim();
-
-      // If cut off / missing Answer:, do one quick continuation
-      if (looksIncomplete(text)) {
-        const second = await engine.completion({
-          prompt: prompt + text + "\n",
-          n_predict: 256,
-          temperature: 0.1,
-          top_p: 0.9,
-          stop: ["<end_of_turn>", "<eos>"],
-        });
-
-        const cont = (second.text ?? "").trim();
-        if (cont) text = (text + "\n" + cont).trim();
-      }
-
-      return {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: text,
-      };
+      return { id: Date.now().toString(), role: "assistant", content: text.trim() };
     } catch (err) {
-      console.error("AI Error:", err);
-      return {
-        id: "error",
-        role: "assistant",
-        content: "I had a little trouble thinking. Can you ask that again?",
-      };
+      return { id: "error", role: "assistant", content: "AI Error" };
     } finally {
       inflight = null;
     }
   })();
-
   return inflight;
 }
 
-/* ------------------ LIFECYCLE ------------------ */
-
 export async function warmupAI(): Promise<void> {
   try {
-    const downloaded = await isModelDownloaded();
-    if (!downloaded) return;
-
-    const engine = await getContext();
-    await engine.completion({
-      prompt: "<bos><start_of_turn>user\n1+1<end_of_turn>\n<start_of_turn>model\n",
-      n_predict: 8,
-      temperature: 0.1,
-      top_p: 0.9,
-      stop: ["<end_of_turn>", "<eos>"],
-    });
+    if (!(await isModelDownloaded())) return;
+    const engine = await getContext("gemma2b");
+    await engine.completion({ prompt: "<bos>", n_predict: 1 });
   } catch {}
 }
 
 export async function releaseContext(): Promise<void> {
-  if (!ctx) return;
-  try {
-    await ctx.release();
-  } catch {}
-  ctx = null;
+  if (ctx) { await ctx.release(); ctx = null; loadedModel = null; }
 }

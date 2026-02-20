@@ -10,6 +10,7 @@ import {
   Dimensions,
   Pressable,
   Modal,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +19,10 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
 import { AskAIButton } from "../../components/AskAIButton";
+import { NextStepFooter } from "../../components/NextStepFooter";
+
+import { generateQuizFromTranscript } from "../../lib/ai.local";
+import { getLessonInfoByUnit, type LessonTranscript } from "../../lib/lessonTranscripts";
 
 /* ----------------------------- Quiz Data ---------------------------- */
 
@@ -29,7 +34,7 @@ type QuizQuestion = {
   topic: string;
   explanation: string;
   difficulty?: "Easy" | "Medium" | "Hard";
-  type?: "Premade Quiz" | "Practice";
+  type?: "Premade Quiz" | "Practice" | "AI Quiz";
 };
 
 const BASE_QUESTIONS: QuizQuestion[] = [
@@ -182,6 +187,7 @@ const L10N: Record<
     score: string;
     premade: string;
     practice: string;
+    aiQuiz: string;
     explain: string;
     placeholder: string;
     back: string;
@@ -205,6 +211,13 @@ const L10N: Record<
     rankD: string;
     rewardsTitle: string;
     wrongTitle: string;
+
+    // AI quiz
+    genBtn: string;
+    selectLesson: string;
+    cancel: string;
+    thinkingTitle: string;
+    thinkingSub: string;
   }
 > = {
   English: {
@@ -212,6 +225,7 @@ const L10N: Record<
     score: "Score",
     premade: "Premade Quiz",
     practice: "Practice",
+    aiQuiz: "AI Quiz",
     explain: "Explain the Answer",
     placeholder: "Ask for more explanation...",
     back: "Back",
@@ -234,12 +248,19 @@ const L10N: Record<
     rankD: "Keep Going",
     rewardsTitle: "Rewards",
     wrongTitle: "Practice Targets",
+
+    genBtn: "Generate AI Quiz",
+    selectLesson: "Select a Lesson",
+    cancel: "Cancel",
+    thinkingTitle: "Offklass AI is thinking...",
+    thinkingSub: "Creating your custom quiz.",
   },
   नेपाली: {
     qOf: (a, b) => `प्रश्न ${a} / ${b}`,
     score: "अंक",
     premade: "तयार क्विज",
     practice: "अभ्यास",
+    aiQuiz: "AI क्विज",
     explain: "उत्तर बुझाउनुहोस्",
     placeholder: "थप व्याख्या सोध्नुहोस्...",
     back: "पछाडि",
@@ -262,12 +283,19 @@ const L10N: Record<
     rankD: "जारी राख्नुहोस्",
     rewardsTitle: "इनाम",
     wrongTitle: "अभ्यास लक्ष्य",
+
+    genBtn: "AI क्विज बनाउनुहोस्",
+    selectLesson: "पाठ छान्नुहोस्",
+    cancel: "रद्द गर्नुहोस्",
+    thinkingTitle: "Offklass AI सोच्दैछ...",
+    thinkingSub: "तपाईंको कस्टम क्विज बनाउँदै।",
   },
   اردو: {
     qOf: (a, b) => `سوال ${a} / ${b}`,
     score: "اسکور",
     premade: "تیار کوئز",
     practice: "پریکٹس",
+    aiQuiz: "AI کوئز",
     explain: "جواب سمجھائیں",
     placeholder: "مزید وضاحت پوچھیں...",
     back: "واپس",
@@ -290,12 +318,19 @@ const L10N: Record<
     rankD: "جاری رکھیں",
     rewardsTitle: "انعامات",
     wrongTitle: "پریکٹس ہدف",
+
+    genBtn: "AI کوئز بنائیں",
+    selectLesson: "سبق منتخب کریں",
+    cancel: "منسوخ",
+    thinkingTitle: "Offklass AI سوچ رہا ہے...",
+    thinkingSub: "آپ کا کسٹم کوئز تیار ہو رہا ہے۔",
   },
   বাংলা: {
     qOf: (a, b) => `প্রশ্ন ${a} / ${b}`,
     score: "স্কোর",
     premade: "প্রিমেড কুইজ",
     practice: "প্র্যাকটিস",
+    aiQuiz: "AI কুইজ",
     explain: "উত্তর ব্যাখ্যা করুন",
     placeholder: "আরও ব্যাখ্যা চাই...",
     back: "ফিরে যান",
@@ -318,12 +353,19 @@ const L10N: Record<
     rankD: "চালিয়ে যান",
     rewardsTitle: "রিওয়ার্ড",
     wrongTitle: "প্র্যাকটিস টার্গেট",
+
+    genBtn: "AI কুইজ তৈরি করুন",
+    selectLesson: "লেসন নির্বাচন করুন",
+    cancel: "বাতিল",
+    thinkingTitle: "Offklass AI ভাবছে...",
+    thinkingSub: "আপনার কাস্টম কুইজ বানাচ্ছে।",
   },
   हिन्दी: {
     qOf: (a, b) => `प्रश्न ${a} / ${b}`,
     score: "स्कोर",
     premade: "Premade Quiz",
     practice: "Practice",
+    aiQuiz: "AI Quiz",
     explain: "Answer समझाओ",
     placeholder: "और explanation पूछो...",
     back: "Back",
@@ -346,6 +388,12 @@ const L10N: Record<
     rankD: "Keep Going",
     rewardsTitle: "Rewards",
     wrongTitle: "Practice Targets",
+
+    genBtn: "Generate AI Quiz",
+    selectLesson: "Select a Lesson",
+    cancel: "Cancel",
+    thinkingTitle: "Offklass AI is thinking...",
+    thinkingSub: "Creating your custom quiz.",
   },
 };
 
@@ -397,6 +445,13 @@ export default function Quizzes() {
   const [aiText, setAiText] = useState("");
   const [showExplainSheet, setShowExplainSheet] = useState(false);
 
+  // AI quiz generation (merged from quizzes_2.tsx)
+  const [showLessonSelector, setShowLessonSelector] = useState(false);
+  const [selectedUnit, setSelectedUnit] = useState("Unit 1: Place Value");
+  const [availableTranscripts, setAvailableTranscripts] = useState<LessonTranscript[]>([]);
+  const [isLoadingTranscripts, setIsLoadingTranscripts] = useState(false);
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+
   useEffect(() => {
     (async () => {
       const saved = await loadJSON<OnboardingData | null>(ONBOARD_KEY, null);
@@ -404,6 +459,18 @@ export default function Quizzes() {
       setLang(LANGS.includes(l) ? l : "English");
     })();
   }, []);
+
+  // load transcripts when opening the selector
+  useEffect(() => {
+    if (!showLessonSelector) return;
+    setIsLoadingTranscripts(true);
+    try {
+      const transcripts = getLessonInfoByUnit(selectedUnit);
+      setAvailableTranscripts(transcripts);
+    } finally {
+      setIsLoadingTranscripts(false);
+    }
+  }, [showLessonSelector, selectedUnit]);
 
   const total = questions.length;
   const q = questions[current];
@@ -428,11 +495,12 @@ export default function Quizzes() {
     return clampPct(Math.round((answeredCount / Math.max(1, total)) * 100));
   }, [answeredCount, total]);
 
-  const answeredCorrect = isAnswered && selected === q.correctAnswer;
+  const answeredCorrect = !!q && isAnswered && selected === q.correctAnswer;
 
   const selectOption = (opt: string) => {
     if (done) return;
     if (isAnswered) return;
+    if (!q) return;
     setAnswers((prev) => ({
       ...prev,
       [q.id]: { selected: opt, isAnswered: false },
@@ -441,6 +509,7 @@ export default function Quizzes() {
 
   const submit = () => {
     if (done) return;
+    if (!q) return;
     if (selected == null) return;
     if (isAnswered) return;
 
@@ -514,7 +583,49 @@ export default function Quizzes() {
     setShowExplainSheet(false);
   };
 
-  const headerTagType = q?.type ?? (mode === "practice" ? T.practice : T.premade);
+  // ---- AI QUIZ GENERATION (merged) ----
+  async function generateAIQuiz(lesson: LessonTranscript) {
+    setShowLessonSelector(false); // close immediately
+    setIsGeneratingQuiz(true);
+
+    try {
+      const generated = await generateQuizFromTranscript(lesson.transcript, lesson.title, lesson.topic);
+
+      if (generated && generated.length > 0) {
+        const quizQuestions: QuizQuestion[] = generated.map((g: any, idx: number) => ({
+          id: typeof g.id === "number" ? g.id : idx + 1,
+          question: g.question,
+          options: g.options,
+          correctAnswer: g.correctAnswer,
+          topic: g.topic ?? lesson.topic ?? "Lesson",
+          explanation: g.explanation ?? "",
+          difficulty: g.difficulty ?? "Medium",
+          type: "AI Quiz",
+        }));
+
+        setMode("quiz");
+        setQuestions(quizQuestions);
+
+        // reset run state
+        setCurrent(0);
+        setAnswers({});
+        setWrongIds([]);
+        setDone(false);
+        setAiText("");
+        setShowExplainSheet(false);
+      }
+    } catch (e) {
+      // keep the app safe even if generation fails
+      console.error("AI quiz generation error:", e);
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
+  }
+
+  const headerTagType =
+    q?.type ??
+    (mode === "practice" ? T.practice : T.premade);
+
   const headerTagDiff = q?.difficulty ?? "Medium";
 
   // ---- game-y results (DONE screen) ----
@@ -537,7 +648,6 @@ export default function Quizzes() {
 
   const wrongCount = wrongIds.length;
   const targetTopics = useMemo(() => {
-    // show up to 3 targets on results card (makes it feel like a game "quests")
     const wrongQs = BASE_QUESTIONS.filter((qq) => wrongIds.includes(qq.id));
     const topics = Array.from(new Set(wrongQs.map((x) => x.topic)));
     return topics.slice(0, 3);
@@ -573,12 +683,32 @@ export default function Quizzes() {
                   <View style={[styles.progressInner, { width: `${progressPct}%` }]} />
                 </View>
 
-                {!done ? (
+                {/* AI quiz generator button (hidden while generating and on practice mode) */}
+                {!done && !isGeneratingQuiz && mode === "quiz" && (
+                  <Pressable
+                    onPress={() => setShowLessonSelector(true)}
+                    style={({ pressed }) => [styles.genBtn, pressed && { opacity: 0.92 }]}
+                  >
+                    <Ionicons name="sparkles" size={18} color="#fff" />
+                    <Text style={styles.genBtnText}>{T.genBtn}</Text>
+                  </Pressable>
+                )}
+
+                {/* Generating state */}
+                {isGeneratingQuiz ? (
+                  <View style={styles.thinkingCard}>
+                    <ActivityIndicator size="large" color="#5B35F2" />
+                    <Text style={[styles.thinkingTitle, rtl]}>{T.thinkingTitle}</Text>
+                    <Text style={[styles.thinkingSub, rtl]}>{T.thinkingSub}</Text>
+                  </View>
+                ) : !done ? (
                   <>
                     {/* tags */}
                     <View style={styles.tagsRow}>
                       <View style={[styles.tag, styles.tagGreen]}>
-                        <Text style={styles.tagTextGreen}>{headerTagType}</Text>
+                        <Text style={styles.tagTextGreen}>
+                          {headerTagType === "AI Quiz" ? T.aiQuiz : headerTagType}
+                        </Text>
                       </View>
                       <View style={[styles.tag, styles.tagPurple]}>
                         <Text style={styles.tagTextPurple}>{headerTagDiff}</Text>
@@ -586,61 +716,63 @@ export default function Quizzes() {
                     </View>
 
                     {/* question */}
-                    <Text style={[styles.question, rtl]}>{q.question}</Text>
+                    <Text style={[styles.question, rtl]}>{q?.question ?? "—"}</Text>
 
                     {/* options */}
-                    <View style={{ gap: 12 }}>
-                      {q.options.map((opt) => {
-                        const isSel = selected === opt;
-                        const isCorrect = opt === q.correctAnswer;
+                    {!!q && (
+                      <View style={{ gap: 12 }}>
+                        {q.options.map((opt) => {
+                          const isSel = selected === opt;
+                          const isCorrect = opt === q.correctAnswer;
 
-                        let boxStyle = styles.optionIdle;
-                        let textStyle = styles.optionTextIdle;
-                        let rightIcon: null | "checkmark-circle" | "close-circle" = null;
+                          let boxStyle = styles.optionIdle;
+                          let textStyle = styles.optionTextIdle;
+                          let rightIcon: null | "checkmark-circle" | "close-circle" = null;
 
-                        if (!isAnswered) {
-                          if (isSel) {
-                            boxStyle = styles.optionSelected;
-                            textStyle = styles.optionTextSelected;
-                          }
-                        } else {
-                          if (isCorrect) {
-                            boxStyle = styles.optionCorrect;
-                            textStyle = styles.optionTextSelected;
-                            rightIcon = "checkmark-circle";
-                          } else if (isSel && !isCorrect) {
-                            boxStyle = styles.optionWrong;
-                            textStyle = styles.optionTextSelected;
-                            rightIcon = "close-circle";
+                          if (!isAnswered) {
+                            if (isSel) {
+                              boxStyle = styles.optionSelected;
+                              textStyle = styles.optionTextSelected;
+                            }
                           } else {
-                            boxStyle = styles.optionIdleAnswered;
-                            textStyle = styles.optionTextIdleAnswered;
+                            if (isCorrect) {
+                              boxStyle = styles.optionCorrect;
+                              textStyle = styles.optionTextSelected;
+                              rightIcon = "checkmark-circle";
+                            } else if (isSel && !isCorrect) {
+                              boxStyle = styles.optionWrong;
+                              textStyle = styles.optionTextSelected;
+                              rightIcon = "close-circle";
+                            } else {
+                              boxStyle = styles.optionIdleAnswered;
+                              textStyle = styles.optionTextIdleAnswered;
+                            }
                           }
-                        }
 
-                        return (
-                          <TouchableOpacity
-                            key={opt}
-                            activeOpacity={0.85}
-                            disabled={isAnswered}
-                            onPress={() => selectOption(opt)}
-                            style={[styles.optionBase, boxStyle]}
-                          >
-                            <Text style={[styles.optionTextBase, textStyle, rtl]}>{opt}</Text>
-                            {!!rightIcon && (
-                              <Ionicons
-                                name={rightIcon}
-                                size={22}
-                                color={rightIcon === "checkmark-circle" ? "#16A34A" : "#DC2626"}
-                              />
-                            )}
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                          return (
+                            <TouchableOpacity
+                              key={opt}
+                              activeOpacity={0.85}
+                              disabled={isAnswered}
+                              onPress={() => selectOption(opt)}
+                              style={[styles.optionBase, boxStyle]}
+                            >
+                              <Text style={[styles.optionTextBase, textStyle, rtl]}>{opt}</Text>
+                              {!!rightIcon && (
+                                <Ionicons
+                                  name={rightIcon}
+                                  size={22}
+                                  color={rightIcon === "checkmark-circle" ? "#16A34A" : "#DC2626"}
+                                />
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
 
                     {/* feedback banner */}
-                    {isAnswered && (
+                    {!!q && isAnswered && (
                       <View style={[styles.feedbackBanner, answeredCorrect ? styles.bannerOk : styles.bannerBad]}>
                         <Text
                           style={[
@@ -656,10 +788,7 @@ export default function Quizzes() {
 
                     {/* bottom buttons */}
                     <View style={styles.bottomRow}>
-                      <Pressable
-                        onPress={backQuestion}
-                        style={({ pressed }) => [styles.btnGhost, pressed && { opacity: 0.9 }]}
-                      >
+                      <Pressable onPress={backQuestion} style={({ pressed }) => [styles.btnGhost, pressed && { opacity: 0.9 }]}>
                         <Ionicons name="arrow-back" size={18} color="#111827" />
                         <Text style={styles.btnGhostText}>{T.back}</Text>
                       </Pressable>
@@ -677,10 +806,7 @@ export default function Quizzes() {
                           <Ionicons name="arrow-forward" size={18} color="#fff" />
                         </Pressable>
                       ) : (
-                        <Pressable
-                          onPress={goNextOrFinish}
-                          style={({ pressed }) => [styles.btnPrimary, pressed && { opacity: 0.92 }]}
-                        >
+                        <Pressable onPress={goNextOrFinish} style={({ pressed }) => [styles.btnPrimary, pressed && { opacity: 0.92 }]}>
                           <Text style={styles.btnPrimaryText}>{current < total - 1 ? T.next : T.finish}</Text>
                           <Ionicons name="arrow-forward" size={18} color="#fff" />
                         </Pressable>
@@ -732,17 +858,14 @@ export default function Quizzes() {
                         </View>
                       </View>
 
-                      {/* fun confetti dots */}
                       <View style={styles.confettiRow}>
                         <View style={[styles.dot, { opacity: 0.95 }]} />
                         <View style={[styles.dot, { opacity: 0.7 }]} />
-                        <View style={[styles.dot, { opacity: 0.85 }]} />
-                        <View style={[styles.dot, { opacity: 0.6 }]} />
-                        <View style={[styles.dot, { opacity: 0.9 }]} />
+                        <View style={[styles.dot, { opacity: 0.55 }]} />
+                        <View style={[styles.dot, { opacity: 0.35 }]} />
                       </View>
                     </LinearGradient>
 
-                    {/* Rewards / Targets */}
                     <View style={styles.doneCardsRow}>
                       <View style={styles.smallCard}>
                         <Text style={styles.smallCardTitle}>{T.rewardsTitle}</Text>
@@ -811,20 +934,21 @@ export default function Quizzes() {
                       <Text style={styles.doneReplayText}>{T.playAgain}</Text>
                     </Pressable>
 
-                    <Pressable
-                      onPress={() => router.back()}
-                      style={({ pressed }) => [styles.doneExitBtn, pressed && { opacity: 0.92 }]}
-                    >
+                    <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.doneExitBtn, pressed && { opacity: 0.92 }]}>
                       <Ionicons name="home" size={18} color="#111827" />
                       <Text style={styles.doneExitText}>Go Back</Text>
                     </Pressable>
+
+                    <View style={{ marginTop: 12 }}>
+                      <NextStepFooter onPlayAgain={restartQuiz} nextLessonPath="/tabs/lessons" nextQuizPath="/tabs/quizzes" />
+                    </View>
                   </View>
                 )}
               </View>
             </View>
 
-            {/* RIGHT: AI Helper panel (tablet only; not on done) */}
-            {isTablet && !done && (
+            {/* RIGHT: AI Helper panel (tablet only; not on done; not while generating) */}
+            {isTablet && !done && !isGeneratingQuiz && (
               <View style={[styles.right, { flex: 0.9 }]}>
                 <View style={styles.aiCard}>
                   <View style={styles.aiHeader}>
@@ -842,17 +966,23 @@ export default function Quizzes() {
 
                   <View style={styles.aiBody}>
                     {aiText ? (
-                      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
+                      <ScrollView
+                        style={{ flex: 1 }}
+                        contentContainerStyle={{ padding: 16 }}
+                        showsVerticalScrollIndicator={false}
+                      >
                         <Text style={[styles.aiAnswer, rtl]}>{aiText}</Text>
 
-                        <View style={{ marginTop: 14 }}>
-                          <AskAIButton
-                            question={q.question}
-                            userAnswer={selected ?? ""}
-                            correctAnswer={q.correctAnswer}
-                            contextType="quiz"
-                          />
-                        </View>
+                        {!!q && (
+                          <View style={{ marginTop: 14 }}>
+                            <AskAIButton
+                              question={q.question}
+                              userAnswer={selected ?? ""}
+                              correctAnswer={q.correctAnswer}
+                              contextType="quiz"
+                            />
+                          </View>
+                        )}
                       </ScrollView>
                     ) : (
                       <View style={styles.aiEmpty}>
@@ -895,7 +1025,7 @@ export default function Quizzes() {
           </View>
 
           {/* Mobile explain button */}
-          {!isTablet && !done && (
+          {!isTablet && !done && !isGeneratingQuiz && (
             <View style={{ marginTop: 12 }}>
               <Pressable onPress={explainNow} style={({ pressed }) => [styles.mobileExplainBtn, pressed && { opacity: 0.92 }]}>
                 <Ionicons name="sparkles-outline" size={18} color="#fff" />
@@ -918,7 +1048,7 @@ export default function Quizzes() {
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={[styles.sheetText, rtl]}>{q?.explanation ?? ""}</Text>
 
-                {q && (
+                {!!q && (
                   <View style={{ marginTop: 14 }}>
                     <AskAIButton
                       question={q.question}
@@ -928,6 +1058,52 @@ export default function Quizzes() {
                     />
                   </View>
                 )}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* Lesson selector modal (AI quiz) */}
+        <Modal visible={showLessonSelector} transparent animationType="fade" onRequestClose={() => setShowLessonSelector(false)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setShowLessonSelector(false)}>
+            <Pressable style={[styles.sheetCard, { maxHeight: "80%" }]} onPress={() => {}}>
+              <View style={styles.sheetTop}>
+                <Text style={styles.sheetTitle}>{T.selectLesson}</Text>
+                <Pressable onPress={() => setShowLessonSelector(false)} style={styles.sheetClose}>
+                  <Ionicons name="close" size={18} color="#111827" />
+                </Pressable>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {isLoadingTranscripts ? (
+                  <View style={{ paddingVertical: 24, alignItems: "center" }}>
+                    <ActivityIndicator color="#5B35F2" />
+                    <Text style={{ marginTop: 10, fontWeight: "900", color: "rgba(17,24,39,0.7)" }}>Loading lessons...</Text>
+                  </View>
+                ) : (
+                  <View style={{ gap: 10 }}>
+                    {availableTranscripts.map((t) => (
+                      <Pressable
+                        key={t.lessonId}
+                        onPress={() => generateAIQuiz(t)}
+                        style={({ pressed }) => [styles.lessonOption, pressed && { opacity: 0.92 }]}
+                      >
+                        <Text style={[styles.lessonTitle, rtl]} numberOfLines={2}>
+                          {t.title}
+                        </Text>
+                        <Text style={[styles.lessonSub, rtl]} numberOfLines={1}>
+                          {t.topic}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+
+                <View style={{ marginTop: 14 }}>
+                  <Pressable onPress={() => setShowLessonSelector(false)} style={({ pressed }) => [styles.lessonCancel, pressed && { opacity: 0.92 }]}>
+                    <Text style={styles.lessonCancelText}>{T.cancel}</Text>
+                  </Pressable>
+                </View>
               </ScrollView>
             </Pressable>
           </Pressable>
@@ -979,76 +1155,112 @@ const styles = StyleSheet.create({
   },
   progressInner: { height: "100%", borderRadius: 999, backgroundColor: "#5B35F2" },
 
-  tagsRow: { flexDirection: "row", gap: 10, marginTop: 14 },
-  tag: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1 },
+  genBtn: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "#5B35F2",
+    borderWidth: 1,
+    borderColor: "rgba(91,53,242,0.25)",
+  },
+  genBtnText: { color: "#fff", fontWeight: "900" },
+
+  thinkingCard: {
+    marginTop: 14,
+    paddingVertical: 26,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(91,53,242,0.20)",
+    backgroundColor: "rgba(91,53,242,0.07)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  thinkingTitle: { marginTop: 10, fontSize: 18, fontWeight: "900", color: "#111827" },
+  thinkingSub: { fontWeight: "800", color: "rgba(17,24,39,0.65)" },
+
+  tagsRow: { flexDirection: "row", gap: 10, marginTop: 14, marginBottom: 12 },
+  tag: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1 },
   tagGreen: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.22)" },
   tagTextGreen: { color: "#16A34A", fontWeight: "900" },
   tagPurple: { backgroundColor: "rgba(91,53,242,0.10)", borderColor: "rgba(91,53,242,0.20)" },
   tagTextPurple: { color: "#5B35F2", fontWeight: "900" },
 
-  question: { marginTop: 14, marginBottom: 14, color: "#111827", fontWeight: "900", fontSize: 30, lineHeight: 36 },
+  question: { color: "#111827", fontSize: 20, fontWeight: "900", marginBottom: 14, lineHeight: 26 },
 
   optionBase: {
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     borderWidth: 2,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
-  optionTextBase: { fontSize: 18, fontWeight: "900" },
-  optionIdle: { backgroundColor: "#FFFFFF", borderColor: "rgba(17,24,39,0.15)" },
+  optionTextBase: { flex: 1, fontSize: 16, fontWeight: "900" },
+
+  optionIdle: { backgroundColor: "#fff", borderColor: "rgba(17,24,39,0.14)" },
   optionTextIdle: { color: "#111827" },
-  optionSelected: { backgroundColor: "rgba(47,107,255,0.10)", borderColor: "#2F6BFF" },
+
+  optionSelected: { backgroundColor: "rgba(47,107,255,0.10)", borderColor: "rgba(47,107,255,0.55)" },
   optionTextSelected: { color: "#111827" },
-  optionCorrect: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "#22C55E" },
-  optionWrong: { backgroundColor: "rgba(220,38,38,0.08)", borderColor: "#EF4444" },
-  optionIdleAnswered: { backgroundColor: "rgba(255,255,255,0.6)", borderColor: "rgba(17,24,39,0.10)" },
-  optionTextIdleAnswered: { color: "rgba(17,24,39,0.45)" },
 
-  feedbackBanner: { marginTop: 16, borderRadius: 14, paddingVertical: 14, alignItems: "center", borderWidth: 1 },
+  optionCorrect: { backgroundColor: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.55)" },
+  optionWrong: { backgroundColor: "rgba(220,38,38,0.10)", borderColor: "rgba(220,38,38,0.55)" },
+
+  optionIdleAnswered: { backgroundColor: "rgba(17,24,39,0.03)", borderColor: "rgba(17,24,39,0.10)" },
+  optionTextIdleAnswered: { color: "rgba(17,24,39,0.55)" },
+
+  feedbackBanner: {
+    marginTop: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
   bannerOk: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.25)" },
-  bannerBad: { backgroundColor: "rgba(220,38,38,0.08)", borderColor: "rgba(220,38,38,0.22)" },
-  bannerText: { fontWeight: "900", fontSize: 18 },
+  bannerBad: { backgroundColor: "rgba(220,38,38,0.08)", borderColor: "rgba(220,38,38,0.20)" },
+  bannerText: { fontWeight: "900" },
 
-  bottomRow: { marginTop: 18, flexDirection: "row", gap: 12, justifyContent: "space-between" },
-
+  bottomRow: { flexDirection: "row", gap: 10, marginTop: 16 },
   btnGhost: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: "rgba(17,24,39,0.14)",
+    backgroundColor: "#fff",
     paddingVertical: 14,
     paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
   },
-  btnGhostText: { color: "#111827", fontWeight: "900", fontSize: 16 },
-
+  btnGhostText: { color: "#111827", fontWeight: "900" },
   btnPrimary: {
     flex: 1,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "#5B35F2",
     backgroundColor: "#5B35F2",
-    borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    gap: 8,
   },
-  btnPrimaryText: { color: "#FFFFFF", fontWeight: "900", fontSize: 16 },
+  btnPrimaryText: { color: "#fff", fontWeight: "900" },
 
   /* DONE */
-  doneWrap: { paddingTop: 16, paddingBottom: 10 },
+  doneWrap: { marginTop: 6 },
   doneBanner: {
     borderRadius: 22,
     padding: 16,
@@ -1071,9 +1283,9 @@ const styles = StyleSheet.create({
   },
   doneBadgeText: { color: "#111827", fontWeight: "900" },
   doneStarsRow: { flexDirection: "row", gap: 4 },
-
   doneTitle: { marginTop: 12, color: "#fff", fontWeight: "900", fontSize: 28 },
   doneScoreRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 12 },
+
   bigScorePill: {
     width: 96,
     height: 72,
@@ -1094,19 +1306,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.25)",
     overflow: "hidden",
   },
-  miniBarInner: {
-    height: "100%",
-    borderRadius: 999,
-    backgroundColor: "#FFD54A",
-  },
+  miniBarInner: { height: "100%", borderRadius: 999, backgroundColor: "#FFD54A" },
 
-  confettiRow: { marginTop: 12, flexDirection: "row", gap: 10 },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.9)",
-  },
+  confettiRow: { marginTop: 14, flexDirection: "row", gap: 10, alignItems: "center" },
+  dot: { width: 10, height: 10, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.75)" },
 
   doneCardsRow: { marginTop: 14, flexDirection: "row", gap: 12 },
   smallCard: {
@@ -1170,20 +1373,21 @@ const styles = StyleSheet.create({
 
   doneExitBtn: {
     marginTop: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(17,24,39,0.06)",
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 10,
-    borderWidth: 2,
-    borderColor: "rgba(17,24,39,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
   },
   doneExitText: { color: "#111827", fontWeight: "900", fontSize: 16 },
 
-  /* RIGHT AI PANEL */
+  /* RIGHT PANEL */
   right: { flex: 1 },
+
   aiCard: {
     backgroundColor: WHITE,
     borderRadius: 22,
@@ -1195,105 +1399,134 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
-    height: "100%",
-    minHeight: 560,
+    minHeight: 420,
   },
+
   aiHeader: {
-    backgroundColor: "#3C5CFF",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    padding: 14,
+    backgroundColor: "#111827",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   aiHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   aiIcon: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.20)",
+    backgroundColor: "#5B35F2",
     alignItems: "center",
     justifyContent: "center",
   },
-  aiTitle: { color: "#fff", fontWeight: "900", fontSize: 16 },
-  aiSub: { color: "rgba(255,255,255,0.9)", fontWeight: "800", marginTop: 2 },
+  aiTitle: { color: "#fff", fontWeight: "900" },
+  aiSub: { color: "rgba(255,255,255,0.75)", fontWeight: "800", marginTop: 2, fontSize: 12 },
 
-  aiBody: { flex: 1, backgroundColor: "#F4F7FF" },
-  aiEmpty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 18 },
+  aiBody: { flex: 1 },
+  aiAnswer: { color: "#111827", fontWeight: "800", lineHeight: 20 },
+
+  aiEmpty: { padding: 16, alignItems: "center", justifyContent: "center", flex: 1 },
   aiBotCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: "#6B6BFF",
+    width: 58,
+    height: 58,
+    borderRadius: 999,
+    backgroundColor: "#5B35F2",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
   },
-  aiEmptyTitle: { color: "#111827", fontWeight: "900", fontSize: 20, textAlign: "center" },
-  aiEmptySub: { marginTop: 8, color: "rgba(17,24,39,0.70)", fontWeight: "800", textAlign: "center", lineHeight: 20 },
+  aiEmptyTitle: { color: "#111827", fontWeight: "900", fontSize: 16, textAlign: "center" },
+  aiEmptySub: { marginTop: 6, color: "rgba(17,24,39,0.65)", fontWeight: "800", textAlign: "center" },
 
   aiExplainBtn: {
     marginTop: 14,
-    backgroundColor: "#3C5CFF",
-    borderRadius: 14,
+    backgroundColor: "#111827",
+    borderRadius: 16,
     paddingVertical: 12,
-    paddingHorizontal: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    paddingHorizontal: 14,
   },
-  aiExplainText: { color: "#fff", fontWeight: "900", fontSize: 15 },
+  aiExplainText: { color: "#fff", fontWeight: "900" },
 
-  aiAnswer: { color: "#111827", fontWeight: "800", lineHeight: 20 },
-
-  aiInputRow: {
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.06)",
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
+  aiInputRow: { flexDirection: "row", gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: "rgba(0,0,0,0.08)" },
   aiInput: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "rgba(17,24,39,0.14)",
+    backgroundColor: "rgba(17,24,39,0.06)",
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     fontWeight: "800",
     color: "#111827",
   },
-  aiSendBtn: { width: 48, height: 48, borderRadius: 14, backgroundColor: "#7EA2FF", alignItems: "center", justifyContent: "center" },
-  aiLightBtn: { width: 48, height: 48, borderRadius: 14, backgroundColor: "#5B35F2", alignItems: "center", justifyContent: "center" },
+  aiSendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#5B35F2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiLightBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#111827",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-  /* MOBILE EXPLAIN BTN */
+  /* MOBILE explain */
   mobileExplainBtn: {
-    backgroundColor: "#3C5CFF",
-    borderRadius: 16,
+    width: "100%",
+    borderRadius: 18,
+    backgroundColor: "#111827",
     paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    gap: 10,
   },
-  mobileExplainText: { color: "#fff", fontWeight: "900", fontSize: 16 },
+  mobileExplainText: { color: "#fff", fontWeight: "900" },
 
   /* SHEET */
   sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.30)", justifyContent: "center", padding: 16 },
-  sheetCard: { backgroundColor: "#fff", borderRadius: 18, padding: 14, borderWidth: 1, borderColor: "rgba(0,0,0,0.08)", maxHeight: "80%" },
+  sheetCard: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+    maxHeight: "80%",
+  },
   sheetTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   sheetTitle: { fontWeight: "900", color: "#111827", fontSize: 16 },
-  sheetClose: { width: 36, height: 36, borderRadius: 12, backgroundColor: "rgba(17,24,39,0.06)", alignItems: "center", justifyContent: "center" },
+  sheetClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(17,24,39,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   sheetText: { color: "#111827", fontWeight: "800", lineHeight: 20 },
+
+  /* Lesson list */
+  lessonOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+    backgroundColor: "rgba(17,24,39,0.04)",
+  },
+  lessonTitle: { color: "#111827", fontWeight: "900" },
+  lessonSub: { marginTop: 4, color: "rgba(17,24,39,0.65)", fontWeight: "800", fontSize: 12 },
+
+  lessonCancel: {
+    backgroundColor: "#111827",
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lessonCancelText: { color: "#fff", fontWeight: "900" },
 });

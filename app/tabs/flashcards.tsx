@@ -8,9 +8,6 @@ import {
   Alert,
   Animated,
   Easing,
-  ScrollView,
-  Pressable,
-  Modal,
   Dimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -447,11 +444,8 @@ export default function Flashcards() {
       setCurrent((i) => i - 1);
       return;
     }
-    // if first card, go back a screen
-    // (same behavior you wanted in quizzes)
-    // but only if not finished
     if (!isFinished) {
-      // optional: router.back();  <-- if you want
+      // optional: router.back();
     }
   }
 
@@ -524,9 +518,6 @@ export default function Flashcards() {
     setIsFinished(false);
     resetFlip(true);
   }
-
-  // “Explain / AI” on mobile for flashcards (nice UX)
-  const [showExplainSheet, setShowExplainSheet] = useState(false);
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "left", "right"]}>
@@ -627,11 +618,6 @@ export default function Flashcards() {
 
                   <Text style={[s.label, rtl]}>{T.answerLbl}</Text>
                   <Text style={[s.big, rtl]}>{currentCard?.back ?? "—"}</Text>
-
-                  <Pressable onPress={() => setShowExplainSheet(true)} style={s.miniExplainBtn}>
-                    <Ionicons name="sparkles-outline" size={16} color="#111827" />
-                    <Text style={s.miniExplainTxt}>Ask AI</Text>
-                  </Pressable>
                 </Animated.View>
               </View>
             </Animated.View>
@@ -666,7 +652,7 @@ export default function Flashcards() {
               </TouchableOpacity>
             </View>
 
-            {/* Correct / Incorrect + AI helper */}
+            {/* Correct / Incorrect + Ask Offklass AI (ONLY HERE, ONLY WHEN FLIPPED) */}
             {showBack && (
               <>
                 <View style={[s.row, { marginTop: 10 }]}>
@@ -681,7 +667,6 @@ export default function Flashcards() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Ask Offklass AI about this card (same as quiz, but here on mobile too) */}
                 <View style={{ marginTop: 10 }}>
                   <AskAIButton
                     question={currentCard?.front ?? ""}
@@ -706,33 +691,6 @@ export default function Flashcards() {
                 <Text style={s.resetTxt}>{T.reset}</Text>
               </TouchableOpacity>
             </View>
-
-            {/* AI modal (optional) */}
-            <Modal visible={showExplainSheet} transparent animationType="fade" onRequestClose={() => setShowExplainSheet(false)}>
-              <Pressable style={s.sheetBackdrop} onPress={() => setShowExplainSheet(false)}>
-                <Pressable style={s.sheetCard} onPress={() => {}}>
-                  <View style={s.sheetTop}>
-                    <Text style={s.sheetTitle}>Ask Offklass AI</Text>
-                    <Pressable onPress={() => setShowExplainSheet(false)} style={s.sheetClose}>
-                      <Ionicons name="close" size={18} color="#111827" />
-                    </Pressable>
-                  </View>
-
-                  <ScrollView showsVerticalScrollIndicator={false}>
-                    <Text style={[s.sheetText, rtl]}>{currentCard?.front ?? ""}</Text>
-
-                    <View style={{ marginTop: 12 }}>
-                      <AskAIButton
-                        question={currentCard?.front ?? ""}
-                        userAnswer={currentCard?.back ?? ""}
-                        correctAnswer={currentCard?.back ?? ""}
-                        contextType="flashcard"
-                      />
-                    </View>
-                  </ScrollView>
-                </Pressable>
-              </Pressable>
-            </Modal>
           </>
         ) : (
           // ✅ GAME-Y FINISH SCREEN (like quizzes)
@@ -827,16 +785,16 @@ export default function Flashcards() {
             </View>
 
             {needsPracticeIds.length > 0 && (
-              <Pressable onPress={startNeedsPracticeMode} style={({ pressed }) => [s.donePracticeBtn, pressed && { opacity: 0.92 }]}>
+              <TouchableOpacity onPress={startNeedsPracticeMode} style={s.donePracticeBtn}>
                 <Ionicons name="refresh" size={18} color="#fff" />
                 <Text style={s.donePracticeText}>{T.practiceWrong}</Text>
-              </Pressable>
+              </TouchableOpacity>
             )}
 
-            <Pressable onPress={() => resetSession()} style={({ pressed }) => [s.doneReplayBtn, pressed && { opacity: 0.92 }]}>
+            <TouchableOpacity onPress={() => resetSession()} style={s.doneReplayBtn}>
               <Ionicons name="play" size={18} color="#fff" />
               <Text style={s.doneReplayText}>{T.playAgain}</Text>
-            </Pressable>
+            </TouchableOpacity>
 
             <View style={{ marginTop: 12 }}>
               <NextStepFooter onPlayAgain={() => resetSession()} nextLessonPath="/tabs/lessons" nextQuizPath="/tabs/quizzes" />
@@ -939,22 +897,6 @@ const s = StyleSheet.create({
     borderRadius: 999,
   },
   tapHintTxt: { color: "rgba(17,24,39,0.75)", fontWeight: "900" },
-
-  miniExplainBtn: {
-    position: "absolute",
-    bottom: 12,
-    right: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(251,191,36,0.25)",
-    borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.35)",
-  },
-  miniExplainTxt: { color: "#111827", fontWeight: "900" },
 
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 10 },
 
@@ -1127,12 +1069,4 @@ const s = StyleSheet.create({
     gap: 10,
   },
   doneReplayText: { color: "#fff", fontWeight: "900", fontSize: 16 },
-
-  /* SHEET */
-  sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.30)", justifyContent: "center", padding: 16 },
-  sheetCard: { backgroundColor: "#fff", borderRadius: 18, padding: 14, borderWidth: 1, borderColor: "rgba(0,0,0,0.08)", maxHeight: "80%" },
-  sheetTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  sheetTitle: { fontWeight: "900", color: "#111827", fontSize: 16 },
-  sheetClose: { width: 36, height: 36, borderRadius: 12, backgroundColor: "rgba(17,24,39,0.06)", alignItems: "center", justifyContent: "center" },
-  sheetText: { color: "#111827", fontWeight: "800", lineHeight: 20 },
 });

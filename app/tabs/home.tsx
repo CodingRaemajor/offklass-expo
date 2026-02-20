@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 
 import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
 import { getHomeSnapshot } from "../../lib/progress";
@@ -30,6 +30,9 @@ const L10N = {
       flash: "Review key ideas and formulas",
       ai: "Get help when you are stuck",
     },
+    // ✅ new fallbacks
+    selectGrade: "Select grade - Maths",
+    appName: "offklass",
   },
   नेपाली: {
     sep: " • ",
@@ -46,6 +49,8 @@ const L10N = {
       flash: "मुख्य कुरा दोहोर्याउनुहोस्",
       ai: "अड्किँदा मद्दत लिनुहोस्",
     },
+    selectGrade: "कक्षा छान्नुहोस् - Maths",
+    appName: "offklass",
   },
   اردو: {
     sep: " • ",
@@ -62,6 +67,8 @@ const L10N = {
       flash: "اہم نکات دہرائیں",
       ai: "پھنسی ہوئی جگہ پر مدد لیں",
     },
+    selectGrade: "گریڈ منتخب کریں - Maths",
+    appName: "offklass",
   },
   বাংলা: {
     sep: " • ",
@@ -78,6 +85,8 @@ const L10N = {
       flash: "মূল বিষয়গুলো রিভিউ করুন",
       ai: "আটকে গেলে সাহায্য নিন",
     },
+    selectGrade: "গ্রেড নির্বাচন করুন - Maths",
+    appName: "offklass",
   },
   हिन्दी: {
     sep: " • ",
@@ -94,6 +103,8 @@ const L10N = {
       flash: "मुख्य बातें दोहराएँ",
       ai: "अटकने पर मदद लें",
     },
+    selectGrade: "ग्रेड चुनें - Maths",
+    appName: "offklass",
   },
 } as const;
 
@@ -112,17 +123,6 @@ export default function Home() {
   const [streak, setStreak] = useState(0);
   const [level, setLevel] = useState(1);
 
-  useEffect(() => {
-    (async () => {
-      const u = await loadJSON<OnboardingData | null>(ONBOARD_KEY, null);
-      setUser(u);
-
-      const snap = await getHomeSnapshot();
-      setStreak(snap.streak);
-      setLevel(snap.level);
-    })();
-  }, []);
-
   const lang = (user?.language as Lang) || "English";
   const T: Dict = (L10N as any)[LANGS.includes(lang) ? lang : "English"];
 
@@ -134,14 +134,54 @@ export default function Home() {
       } as const)
     : undefined;
 
+  const loadEverything = useCallback(async () => {
+    const u = await loadJSON<OnboardingData | null>(ONBOARD_KEY, null);
+    setUser(u);
+
+    // ✅ if onboarding is cleared, also reset streak/level in UI
+    if (!u) {
+      setStreak(0);
+      setLevel(1);
+      return;
+    }
+
+    const snap = await getHomeSnapshot();
+    setStreak(snap.streak);
+    setLevel(snap.level);
+  }, []);
+
+  // initial
+  useEffect(() => {
+    loadEverything();
+  }, [loadEverything]);
+
+  // ✅ refresh when Home tab is focused (so clearing cache updates Home instantly)
+  useFocusEffect(
+    useCallback(() => {
+      loadEverything();
+      return () => {};
+    }, [loadEverything])
+  );
+
   const name = user?.name?.trim() || "Learner";
-  const grade = user?.grade ?? "Grade 6";
-  const sublabel = `${grade} Math${T.sep}offklass`;
+
+  // ✅ IMPORTANT: no default “Grade 6” anymore
+  const hasGrade = !!user?.grade && String(user.grade).trim().length > 0;
+  const grade = hasGrade ? String(user!.grade) : null;
+
+  // ✅ match your requested text:
+  // - When selected: "Grade 4 Math • offklass"
+  // - When not selected: "Select grade - Maths • offklass"
+  const sublabel = useMemo(() => {
+    if (!grade) return `${T.selectGrade}${T.sep}${T.appName}`;
+    return `${grade} Math${T.sep}${T.appName}`;
+  }, [grade, T]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View style={styles.container}>
-        <DashboardHeader name={name} sublabel={sublabel} streak={streak} level={level} />
+        {/* If DashboardHeader still shows streak even when 0, it will look “cleared” now */}
+        <DashboardHeader name={name} sublabel={sublabel} streak={grade ? streak : 0} level={grade ? level : 1} />
 
         <ScrollView
           style={styles.scroll}
@@ -190,7 +230,6 @@ export default function Home() {
           </View>
 
           {/* remaining space */}
-
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -215,10 +254,7 @@ function ActionCard({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        pressed && { transform: [{ scale: 0.99 }], opacity: 0.96 },
-      ]}
+      style={({ pressed }) => [styles.card, pressed && { transform: [{ scale: 0.99 }], opacity: 0.96 }]}
     >
       <View style={styles.cardIcon}>
         <Ionicons name={icon} size={24} color="#2F6BFF" />
