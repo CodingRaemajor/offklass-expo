@@ -26,6 +26,7 @@
     "expo-video": "~2.2.2",
     "llama.rn": "^0.6.15",
     "mathjs": "^14.8.1",
+    "nerdamer": "^1.1.13",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.6",

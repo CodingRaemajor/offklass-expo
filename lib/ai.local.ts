@@ -2,6 +2,7 @@
 import { initLlama, type LlamaContext } from "llama.rn";
 import { ensureModel, isModelDownloaded, type ModelChoice } from "./LocalModel";
 import Constants from "expo-constants";
+import { tryMathFallback } from "./mathFallback";
 
 export type Message = {
   id: string;
@@ -15,87 +16,65 @@ let inflight: Promise<Message> | null = null;
 
 /* ------------------ REFINED TEACHER PROMPT (ORIGINAL) ------------------ */
 
-const SYSTEM_PROMPT = `
-You are Offklass AI.
-You are a tutor for Grades 4.
-Your goal:
-- Give correct answers
-- Explain simply
-- Always finish the answer
+function getSystemPrompt(grade: number, languageName: string, concept: string): string {
+  return `
+You are Offklass AI: a warm, patient math teacher who loves when students ask questions. You explain to a grade ${grade} student in ${languageName}. Use VERY SIMPLE words like you're talking to a 5-year-old.
 
-====================
-MATH RULES (STRICT)
-====================
+Before you explain, briefly encourage them (e.g. "Great question!" or "I'm so glad you asked—that's how we learn!"). Then explain the concept. Be kind and supportive so they feel safe to keep asking.
 
-1. Solve ONLY the given question.
-- Do not change numbers.
-- Do not rewrite the problem.
+The concept to explain: "${concept}"
 
-2. Allowed methods ONLY:
-- Place value: ADD values (example: 300 + 40 + 5)
-- Multiplication: PARTIAL PRODUCTS only
-  Example:
-  34 x 23
-  34 x 20
-  34 x 3
-  Add the results
-- Division: simple sharing or grouping
+EXPLANATION RULES - Write on the board step-by-step (VERY SIMPLE):
+1. Stack the numbers (standard way)
+2. Show the solving process step by step
+3. Write what you're doing: "0 plus 0 is 0" then show the result
+4. Keep it SHORT - minimal text, just the math steps
+5. NO deep explanations - just show how to solve
+6. Use VERY simple language - no math jargon, use words like "add" not "addition", "take away" not "subtract"
+7. Write like you're solving on a board: "First...", "Next...", "Then..."
+8. Use words a 5-year-old would understand
 
-3. Never use:
-- Algebra
-- Variables
-- Formulas
-- Powers (², ³)
-- Advanced math words
+EXAMPLES OF SIMPLE EXPLANATIONS:
 
-4. Steps rules:
-- Use 3 to 5 steps only
-- One small action per step
-- Very simple words
-- Do not skip steps
+For "Addition":
+"Let me show you:
+  3
++ 2
+---
+  ___
+  
+First, ones: 3 plus 2 is 5
+Write 5:
+  3
++ 2
+---
+  5"
 
-====================
-RESPONSE FORMAT (MANDATORY)
-====================
+For "Multiplication":
+"Let me solve this:
+  3
+× 4
+---
+  ___
+  
+4 times 3 is 12
+Write 12:
+  3
+× 4
+---
+ 12"
 
-Problem: <repeat the exact question>
-
-Steps:
-- Step 1: <simple step>
-- Step 2: <simple step>
-- Step 3: <finish calculation>
-
-Answer: <final answer>
-
-====================
-COMPLETION RULE
-====================
-
-- Never stop early
-- Never omit the final answer
-- If the answer is incomplete, regenerate the full response
-
-====================
-NON-MATH QUESTIONS
-====================
-
-- Answers should be brief and detailed depending on the question
-
-====================
-FINAL CHECK
-====================
-
-Before answering, check:
-- The steps match the answer
-- The answer is complete
-- The explanation fits Grades 4
+Provide a clear, SIMPLE step-by-step explanation that a grade ${grade} student can easily follow.
 `.trim();
+}
 
 /* ------------------ HELPERS ------------------ */
 
-function formatMessagesForGemma(messages: Message[]): string {
+function formatMessagesForGemma(messages: Message[], systemPrompt: string = ""): string {
   let out = "<bos>";
-  out += `<start_of_turn>user\n${SYSTEM_PROMPT}<end_of_turn>\n`;
+  if (systemPrompt) {
+    out += `<start_of_turn>user\n${systemPrompt}<end_of_turn>\n`;
+  }
   for (const msg of messages) {
     if (msg.role === "system") continue;
     const role = msg.role === "user" ? "user" : "model";
@@ -108,14 +87,22 @@ function formatMessagesForGemma(messages: Message[]): string {
 async function getContext(choice: ModelChoice = "gemma2b"): Promise<LlamaContext> {
   if (Constants.appOwnership === "expo") throw new Error("Local AI requires a Development Build.");
   if (ctx && loadedModel === choice) return ctx;
+
   const modelPath = await ensureModel();
-  if (ctx) { try { await ctx.release(); } catch {} } 
+
+  if (ctx) {
+    try {
+      await ctx.release();
+    } catch {}
+  }
+
   ctx = await initLlama({
     model: modelPath,
     n_ctx: 2048,
     n_threads: 4,
     use_mlock: true,
   });
+
   loadedModel = choice;
   return ctx;
 }
@@ -132,7 +119,7 @@ export interface GeneratedQuestion {
 }
 
 const QUIZ_GENERATION_PROMPT = `
-You are Offklass AI. Create 5 multiple choice questions for Grade 2.
+You are Offklass AI. Create 5 multiple choice questions for Grade 4.
 Use the transcript to create REAL math options.
 
 ### GOOD EXAMPLE TO FOLLOW ###
@@ -152,19 +139,22 @@ Explanation: The 4 is in the tens place, so it represents 4 tens.
 Transcript:
 `;
 
-export async function generateQuizFromTranscript(transcript: string, lessonTitle: string, topic: string): Promise<GeneratedQuestion[]> {
+export async function generateQuizFromTranscript(
+  transcript: string,
+  lessonTitle: string,
+  topic: string
+): Promise<GeneratedQuestion[]> {
   try {
     const engine = await getContext("gemma2b");
     const prompt = QUIZ_GENERATION_PROMPT + transcript + "\n\nGenerate 5 questions:";
-    
-const { text } = await engine.completion({
-  prompt: formatMessagesForGemma([{ id: "1", role: "user", content: prompt }]),
-  n_predict: 1000,
-  temperature: 0.0, // Force the AI to be literal/less creative
-  top_p: 0.1,
-});
 
-    // DEBUG: Look at your terminal to see if the AI is actually talking
+    const { text } = await engine.completion({
+      prompt: formatMessagesForGemma([{ id: "1", role: "user", content: prompt }]),
+      n_predict: 1000,
+      temperature: 0.0,
+      top_p: 0.1,
+    });
+
     console.log("--- AI RAW RESPONSE START ---");
     console.log(text);
     console.log("--- AI RAW RESPONSE END ---");
@@ -178,49 +168,48 @@ const { text } = await engine.completion({
 
 function parseQuizResponse(response: string, lessonTitle: string, topic: string): GeneratedQuestion[] {
   const questions: GeneratedQuestion[] = [];
-  
-  // 1. CLEAN THE TEXT: Remove all bold stars (**) and numbers from "Question 1:"
-  // This turns "**Question 1: Text**" into "Question: Text"
-  const cleanResponse = response
-    .replace(/\*\*/g, "")                   // Remove bold stars
-    .replace(/Question\s*\d+:/gi, "Question:"); // Standardize "Question 1:", "Question 2:" to "Question:"
 
-  // 2. Split by "Question:"
-  const rawBlocks = cleanResponse.split(/Question:/i).filter(b => b.trim().length > 10);
-  
+  const cleanResponse = response
+    .replace(/\*\*/g, "")
+    .replace(/Question\s*\d+:/gi, "Question:");
+
+  const rawBlocks = cleanResponse.split(/Question:/i).filter((b) => b.trim().length > 10);
+
   rawBlocks.forEach((block, index) => {
     try {
-      const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-      
-      const questionText = lines[0]; 
-      
-      // Use flexible Regex to find options, ignoring any remaining punctuation
-      const optA = lines.find(l => /^A[:\s.-]/i.test(l))?.replace(/^A[:\s.-]/i, "").trim();
-      const optB = lines.find(l => /^B[:\s.-]/i.test(l))?.replace(/^B[:\s.-]/i, "").trim();
-      const optC = lines.find(l => /^C[:\s.-]/i.test(l))?.replace(/^C[:\s.-]/i, "").trim();
-      const optD = lines.find(l => /^D[:\s.-]/i.test(l))?.replace(/^D[:\s.-]/i, "").trim();
-      
-      // Find Answer/Correct line
-      const answerLine = lines.find(l => /^(Answer|Correct|Correct Answer)[:\s.-]/i.test(l))
-        ?.replace(/^(Answer|Correct|Correct Answer)[:\s.-]/i, "").trim();
-        
-      const explanation = lines.find(l => /^Explanation[:\s.-]/i.test(l))
-        ?.replace(/^Explanation[:\s.-]/i, "").trim();
+      const lines = block
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+
+      const questionText = lines[0];
+
+      const optA = lines.find((l) => /^A[:\s.-]/i.test(l))?.replace(/^A[:\s.-]/i, "").trim();
+      const optB = lines.find((l) => /^B[:\s.-]/i.test(l))?.replace(/^B[:\s.-]/i, "").trim();
+      const optC = lines.find((l) => /^C[:\s.-]/i.test(l))?.replace(/^C[:\s.-]/i, "").trim();
+      const optD = lines.find((l) => /^D[:\s.-]/i.test(l))?.replace(/^D[:\s.-]/i, "").trim();
+
+      const answerLine = lines
+        .find((l) => /^(Answer|Correct|Correct Answer)[:\s.-]/i.test(l))
+        ?.replace(/^(Answer|Correct|Correct Answer)[:\s.-]/i, "")
+        .trim();
+
+      const explanation = lines
+        .find((l) => /^Explanation[:\s.-]/i.test(l))
+        ?.replace(/^Explanation[:\s.-]/i, "")
+        .trim();
 
       if (questionText && optA && optB && optC && optD && answerLine) {
         const options = [optA, optB, optC, optD];
 
-        // 3. SMART ANSWER MATCHING
-        // AI often writes "Answer: B: 5 tens". We need to find "5 tens" or the letter "B"
         let correctIndex = -1;
 
-        // Try matching the text first (highest accuracy)
-        correctIndex = options.findIndex(opt => 
-          answerLine.toLowerCase().includes(opt.toLowerCase()) || 
-          opt.toLowerCase().includes(answerLine.toLowerCase())
+        correctIndex = options.findIndex(
+          (opt) =>
+            answerLine.toLowerCase().includes(opt.toLowerCase()) ||
+            opt.toLowerCase().includes(answerLine.toLowerCase())
         );
 
-        // Fallback: Try matching the letter (A, B, C, D)
         if (correctIndex === -1) {
           const firstChar = answerLine.charAt(0).toUpperCase();
           if (["A", "B", "C", "D"].includes(firstChar)) {
@@ -235,7 +224,7 @@ function parseQuizResponse(response: string, lessonTitle: string, topic: string)
             options,
             correctAnswer: options[correctIndex],
             topic,
-            explanation: explanation || "Keep up the great work!"
+            explanation: explanation || "Keep up the great work!",
           });
         }
       }
@@ -243,27 +232,41 @@ function parseQuizResponse(response: string, lessonTitle: string, topic: string)
       console.error("Parse Error:", err);
     }
   });
-  
+
   return questions;
 }
-/* ... CallAI and other functions stay exactly the same ... */
+
+/* ------------------ AI CHAT ------------------ */
 
 function isGreeting(text: string): boolean {
   const t = text.trim().toLowerCase();
-  return ["hi", "hello", "hey", "hii", "sup"].some(g => t === g || t.startsWith(g + " "));
+  return ["hi", "hello", "hey", "hii", "sup"].some((g) => t === g || t.startsWith(g + " "));
 }
 
 export async function callAI(history: Message[]): Promise<Message> {
   if (inflight) return { id: "busy", role: "assistant", content: "I'm still calculating..." };
 
-  const lastUser = [...history].reverse().find(m => m.role === "user");
-  
+  const lastUser = [...history].reverse().find((m) => m.role === "user");
+
+  // Greeting shortcut
   if (lastUser && isGreeting(lastUser.content)) {
-    return { 
-      id: "greet", 
-      role: "assistant", 
-      content: "Hi! I'm Offklass AI. Which math topic are we working on today?" 
+    return {
+      id: "greet",
+      role: "assistant",
+      content: "Hi! I'm Offklass AI. Which math topic are we working on today?",
     };
+  }
+
+  // ✅ MATH FALLBACK (now supports advanced expressions + equations offline)
+  if (lastUser) {
+    const fallback = tryMathFallback(lastUser.content);
+    if (fallback) {
+      return {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: fallback,
+      };
+    }
   }
 
   inflight = (async () => {
@@ -272,7 +275,8 @@ export async function callAI(history: Message[]): Promise<Message> {
       const { text } = await engine.completion({
         prompt: formatMessagesForGemma(history.slice(-4)),
         n_predict: 600,
-        temperature: 0.1,
+        temperature: 0,
+        top_p: 0.1,
         stop: ["<end_of_turn>", "<eos>"],
       });
       return { id: Date.now().toString(), role: "assistant", content: text.trim() };
@@ -282,6 +286,7 @@ export async function callAI(history: Message[]): Promise<Message> {
       inflight = null;
     }
   })();
+
   return inflight;
 }
 
@@ -294,5 +299,9 @@ export async function warmupAI(): Promise<void> {
 }
 
 export async function releaseContext(): Promise<void> {
-  if (ctx) { await ctx.release(); ctx = null; loadedModel = null; }
+  if (ctx) {
+    await ctx.release();
+    ctx = null;
+    loadedModel = null;
+  }
 }
