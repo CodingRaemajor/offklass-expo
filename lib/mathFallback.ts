@@ -1,140 +1,231 @@
 // lib/mathFallback.ts
-import { create, all } from "mathjs";
-import nerdamer from "nerdamer";
-import "nerdamer/Solve";
-import "nerdamer/Algebra";
-import "nerdamer/Calculus";
 
-const math = create(all, {
-  number: "number",
-  precision: 64,
-});
+type Op = "+" | "-" | "x" | "×" | "*" | "÷" | "/";
 
-function normalize(raw: string) {
-  return raw
+function normalize(input: string) {
+  return input
     .trim()
-    .replace(/[×]/g, "*")
+    .replace(/[×]/g, "x")
     .replace(/[÷]/g, "/")
     .replace(/[−]/g, "-")
     .replace(/\s+/g, " ");
 }
 
-// Quick “is this even math?” check.
-// If false -> return null so LLM handles it.
-function looksLikeMath(s: string) {
-  return /[\d]/.test(s) && /[+\-*/^()=]|sqrt|log|ln|sin|cos|tan|pi|π/i.test(s);
+function padLeft(s: string, width: number) {
+  return s.length >= width ? s : " ".repeat(width - s.length) + s;
 }
 
-// Avoid allowing unsafe tokens in mathjs (extra safety)
-function containsUnsafeTokens(s: string) {
-  return /import|createUnit|evaluate\(|parse\(|typed\(|simplify\(|derivative\(|resolve|function\s*\(|=>|{|}|\[|\]|;|:|new\s+/i.test(
-    s
-  );
+function boardBlock(lines: string[]) {
+  return "```\n" + lines.join("\n") + "\n```";
 }
 
-function formatOffklass(problem: string, steps: string[], answer: string) {
-  const stepLines = steps.map((s, i) => `- Step ${i + 1}: ${s}`).join("\n");
-  return `Problem: ${problem}\n\nSteps:\n${stepLines}\n\nAnswer: ${answer}`;
+function isInt(n: number) {
+  return Number.isFinite(n) && Number.isInteger(n);
 }
 
-function prettyNumber(x: any): string | null {
-  try {
-    // mathjs may return number, BigNumber, Fraction, Complex, etc.
-    const v = typeof x?.valueOf === "function" ? x.valueOf() : x;
+// Format stacked + or -
+function makeAddSubBoard(a: number, b: number, op: "+" | "-") {
+  const A = String(a);
+  const B = String(b);
+  const w = Math.max(A.length, B.length) + 2;
 
-    // Complex not supported for school mode
-    if (v && typeof v === "object" && ("re" in v || "im" in v)) return null;
+  const top = padLeft(A, w);
+  const mid = op + padLeft(B, w - 1);
+  const line = "-".repeat(w);
 
-    if (typeof v === "number") {
-      if (!Number.isFinite(v)) return null;
-      // trim floating noise
-      const rounded = Math.round(v * 1e12) / 1e12;
-      return String(rounded);
+  if (op === "+") {
+    const onesA = Math.abs(a) % 10;
+    const onesB = Math.abs(b) % 10;
+    const tensA = Math.floor(Math.abs(a) / 10);
+    const tensB = Math.floor(Math.abs(b) / 10);
+
+    const onesSum = onesA + onesB;
+    const carry = onesSum >= 10 ? 1 : 0;
+    const onesWrite = onesSum % 10;
+
+    const tensSum = tensA + tensB + carry;
+
+    const result = a + b;
+
+    const blank = padLeft("__", w);
+    const afterOnes = padLeft(String(onesWrite), w);
+    const final = padLeft(String(result), w);
+
+    const steps: string[] = [
+      top,
+      mid,
+      line,
+      blank,
+      "",
+      `First: ones: ${onesA} plus ${onesB} is ${onesSum}`,
+      `Write: ${onesWrite}`,
+      "",
+      top,
+      mid,
+      line,
+      afterOnes,
+      "",
+      carry ? `Next: carry 1 to tens` : `Next: no carry`,
+      `Then: tens: ${tensA} plus ${tensB}${carry ? " plus 1" : ""} is ${tensSum}`,
+      `Write: ${tensSum}`,
+      "",
+      top,
+      mid,
+      line,
+      final,
+    ];
+
+    return steps;
+  }
+
+  // subtraction (simple borrow for 2-digit; if bigger, still works with math)
+  const result = a - b;
+
+  // basic borrow only if both are 0-99
+  if (a >= 0 && b >= 0 && a <= 99 && b <= 99) {
+    const onesA = a % 10;
+    const onesB = b % 10;
+    const tensA = Math.floor(a / 10);
+    const tensB = Math.floor(b / 10);
+
+    let borrow = 0;
+    let onesTop = onesA;
+    let tensTop = tensA;
+
+    if (onesA < onesB) {
+      borrow = 1;
+      onesTop = onesA + 10;
+      tensTop = tensA - 1;
     }
 
-    if (typeof v === "string") return v;
+    const onesDiff = onesTop - onesB;
+    const tensDiff = tensTop - tensB;
 
-    // last resort
-    const s = String(v);
-    if (!s || s === "undefined" || s === "null") return null;
-    return s;
-  } catch {
-    return null;
+    const blank = padLeft("__", w);
+    const afterOnes = padLeft(String(onesDiff), w);
+    const final = padLeft(String(result), w);
+
+    const steps: string[] = [
+      top,
+      mid,
+      line,
+      blank,
+      "",
+      borrow
+        ? `First: borrow 1 ten, ones becomes ${onesTop}`
+        : `First: no borrow`,
+      `Next: ones: ${onesTop} take away ${onesB} is ${onesDiff}`,
+      `Write: ${onesDiff}`,
+      "",
+      top,
+      mid,
+      line,
+      afterOnes,
+      "",
+      `Then: tens: ${tensTop} take away ${tensB} is ${tensDiff}`,
+      `Write: ${tensDiff}`,
+      "",
+      top,
+      mid,
+      line,
+      final,
+    ];
+
+    return steps;
   }
+
+  // fallback subtraction steps (still board-like)
+  const steps: string[] = [
+    top,
+    mid,
+    line,
+    padLeft(String(result), w),
+  ];
+  return steps;
 }
 
-// If user writes sin(30) (common in school), interpret as degrees when it’s a simple number.
-// Only rewrites trig calls where the inside is just a number (no variables).
-function injectDegreesForSimpleTrig(expr: string) {
-  return expr.replace(
-    /\b(sin|cos|tan)\s*\(\s*(-?\d+(?:\.\d+)?)\s*\)/gi,
-    (_m, fn, num) => `${fn}(${num} deg)`
-  );
+// Format multiplication (simple, no long partial products — kid style)
+function makeMulBoard(a: number, b: number) {
+  const A = String(a);
+  const B = String(b);
+  const w = Math.max(A.length, B.length) + 2;
+
+  const top = padLeft(A, w);
+  const mid = "x" + padLeft(B, w - 1);
+  const line = "-".repeat(w);
+
+  const result = a * b;
+
+  const blank = padLeft("__", w);
+  const final = padLeft(String(result), w);
+
+  return [
+    top,
+    mid,
+    line,
+    blank,
+    "",
+    `First: ${b} times ${a} is ${result}`,
+    `Write: ${result}`,
+    "",
+    top,
+    mid,
+    line,
+    final,
+  ];
 }
 
-// Choose a variable to solve for (x by default)
-function pickSolveVar(eqn: string): string {
-  const vars = ["x", "y", "t", "n", "k"];
-  for (const v of vars) {
-    if (new RegExp(`\\b${v}\\b`, "i").test(eqn)) return v;
-  }
-  return "x";
+// Format division (whole numbers only)
+function makeDivBoard(a: number, b: number) {
+  const result = a / b;
+  return [
+    `${a} ÷ ${b}`,
+    "----",
+    "__",
+    "",
+    `First: share ${a} into ${b} groups`,
+    `Then: each group gets ${result}`,
+    `Write: ${result}`,
+    "",
+    `${a} ÷ ${b} = ${result}`,
+  ];
 }
 
 export function tryMathFallback(userText: string): string | null {
-  const original = userText.trim();
-  let input = normalize(original);
+  const input = normalize(userText);
 
-  if (!looksLikeMath(input)) return null;
-  if (containsUnsafeTokens(input)) return null;
+  // Match simple expressions like: 12+12, 45 x 3, 24/6
+  const m = input.match(/^(-?\d+)\s*([+\-x*/])\s*(-?\d+)$/i);
+  if (!m) return null;
 
-  // Replace π with pi for mathjs/nerdamer
-  input = input.replace(/π/g, "pi");
+  const a = Number(m[1]);
+  const op = m[2] as Op;
+  const b = Number(m[3]);
 
-  // Support ln(...) as natural log
-  input = input.replace(/\bln\s*\(/gi, "log(");
+  if (!isInt(a) || !isInt(b)) return null;
 
-  // Interpret simple trig like sin(30) as degrees
-  input = injectDegreesForSimpleTrig(input);
-
-  // -----------------------------
-  // 1) EQUATIONS (contains "=")
-  // -----------------------------
-  if (input.includes("=")) {
-    try {
-      const variable = pickSolveVar(input);
-
-      // nerdamer.solve returns solutions set sometimes: "[2,3]"
-      const sol = (nerdamer as any).solve(input, variable).toString();
-
-      const steps = [
-        "This is an equation because it has an equals sign (=).",
-        `Solve for ${variable}.`,
-        `${variable} = ${sol}`,
-      ];
-
-      return formatOffklass(original, steps, `${variable} = ${sol}`);
-    } catch {
-      return null;
-    }
+  // Encourage line + board block (THIS is what your UI needs)
+  if (op === "+") {
+    const lines = makeAddSubBoard(a, b, "+");
+    return `You’ve got this! Let me solve :\n\n${boardBlock(lines)}`;
   }
 
-  // -----------------------------
-  // 2) EXPRESSIONS (evaluate)
-  // -----------------------------
-  try {
-    const value = math.evaluate(input);
-    const pretty = prettyNumber(value);
-    if (pretty == null) return null;
-
-    const steps = [
-      "Keep the same numbers and symbols.",
-      `Compute: ${input}`,
-      `Result = ${pretty}`,
-    ];
-
-    return formatOffklass(original, steps, pretty);
-  } catch {
-    return null;
+  if (op === "-") {
+    const lines = makeAddSubBoard(a, b, "-");
+    return `You’ve got this! Let me solve :\n\n${boardBlock(lines)}`;
   }
+
+  if (op === "x" || op === "*") {
+    const lines = makeMulBoard(a, b);
+    return `You’ve got this! Let me solve :\n\n${boardBlock(lines)}`;
+  }
+
+  if (op === "/") {
+    if (b === 0) return null;
+    if (a % b !== 0) return null; // keep it simple for kids
+    const lines = makeDivBoard(a, b);
+    return `You’ve got this! Let me solve :\n\n${boardBlock(lines)}`;
+  }
+
+  return null;
 }

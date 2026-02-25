@@ -8,7 +8,8 @@ import {
   Alert,
   Animated,
   Easing,
-  Dimensions,
+  useWindowDimensions,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -126,11 +127,16 @@ const L10N: Record<
     rankB: string;
     rankC: string;
     rankD: string;
+
+    // new UI hints
+    tapToFlipHint: string;
+    deckLabel: string;
+    practiceLabel: string;
   }
 > = {
   English: {
     title: "🧠 Place Value Flashcards!",
-    subtitle: "Tap to flip. Use buttons to navigate.",
+    subtitle: "Flip the card, earn points, build your streak!",
     questionLbl: "Question",
     answerLbl: "Answer",
     topicLbl: "Topic",
@@ -161,10 +167,14 @@ const L10N: Record<
     rankB: "Pro",
     rankC: "Rising Star",
     rankD: "Keep Going",
+
+    tapToFlipHint: "Tip: Tap “Show Answer” to flip",
+    deckLabel: "Deck",
+    practiceLabel: "Practice",
   },
   नेपाली: {
     title: "🧠 स्थानीय मूल्य फ्ल्यासकार्ड!",
-    subtitle: "फ्लिप गर्न ट्याप गर्नुहोस्। बटनले नेभिगेट गर्नुहोस्।",
+    subtitle: "कार्ड फ्लिप गर्नुहोस्, अंक कमाउनुहोस्, स्ट्रिक बनाउनुहोस्!",
     questionLbl: "प्रश्न",
     answerLbl: "उत्तर",
     topicLbl: "विषय",
@@ -195,10 +205,14 @@ const L10N: Record<
     rankB: "प्रो",
     rankC: "राइजिङ स्टार",
     rankD: "जारी राख्नुहोस्",
+
+    tapToFlipHint: "टिप: “उत्तर देखाउनुहोस्” ट्याप गरेर फ्लिप गर्नुहोस्",
+    deckLabel: "डेक",
+    practiceLabel: "अभ्यास",
   },
   اردو: {
     title: "🧠 مقامی قدر فلیش کارڈز!",
-    subtitle: "پلٹنے کے لیے ٹیپ کریں۔ بٹن سے نیویگیٹ کریں۔",
+    subtitle: "کارڈ پلٹیں، پوائنٹس بنائیں، اسٹریک بڑھائیں!",
     questionLbl: "سوال",
     answerLbl: "جواب",
     topicLbl: "موضوع",
@@ -229,10 +243,14 @@ const L10N: Record<
     rankB: "پرو",
     rankC: "رائزنگ اسٹار",
     rankD: "جاری رکھیں",
+
+    tapToFlipHint: "ٹِپ: “جواب دکھائیں” پر ٹیپ کر کے پلٹیں",
+    deckLabel: "ڈیک",
+    practiceLabel: "پریکٹس",
   },
   বাংলা: {
     title: "🧠 স্থানীয় মান ফ্ল্যাশকার্ড!",
-    subtitle: "ফ্লিপ করতে ট্যাপ করুন। বাটন দিয়ে নেভিগেট করুন।",
+    subtitle: "কার্ড ফ্লিপ করুন, পয়েন্ট পান, স্ট্রিক বাড়ান!",
     questionLbl: "প্রশ্ন",
     answerLbl: "উত্তর",
     topicLbl: "বিষয়",
@@ -263,10 +281,14 @@ const L10N: Record<
     rankB: "প্রো",
     rankC: "রাইজিং স্টার",
     rankD: "চালিয়ে যান",
+
+    tapToFlipHint: "টিপ: “উত্তর দেখুন” ট্যাপ করে ফ্লিপ করুন",
+    deckLabel: "ডেক",
+    practiceLabel: "প্র্যাকটিস",
   },
   हिन्दी: {
     title: "🧠 स्थानीय मान फ्लैशकार्ड!",
-    subtitle: "फ्लिप करने के लिए टैप करें। बटन से नेविगेट करें।",
+    subtitle: "कार्ड फ्लिप करें, पॉइंट्स कमाएँ, स्ट्रीक बढ़ाएँ!",
     questionLbl: "प्रश्न",
     answerLbl: "उत्तर",
     topicLbl: "विषय",
@@ -297,6 +319,10 @@ const L10N: Record<
     rankB: "Pro",
     rankC: "Rising Star",
     rankD: "Keep Going",
+
+    tapToFlipHint: "टिप: “उत्तर दिखाएँ” टैप करके फ्लिप करें",
+    deckLabel: "Deck",
+    practiceLabel: "Practice",
   },
 };
 
@@ -317,8 +343,9 @@ function starsForPct(p: number) {
 
 export default function Flashcards() {
   const insets = useSafeAreaInsets();
-  const { width } = Dimensions.get("window");
+  const { width, height } = useWindowDimensions();
   const isTablet = width >= 900;
+  const isLandscape = width > height;
 
   const [cards, setCards] = useState<Card[]>([]);
   const [baseCards, setBaseCards] = useState<Card[]>(SEED);
@@ -360,8 +387,23 @@ export default function Flashcards() {
     outputRange: ["180deg", "360deg"],
   });
 
-  // tiny “pop” when marking answer (game feel)
+  // tiny “pop” when marking answer
   const pop = useRef(new Animated.Value(1)).current;
+
+  // background float
+  const floaty = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floaty, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(floaty, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    ).start();
+  }, [floaty]);
+
+  const bubbleShift = floaty.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+  const bubbleShift2 = floaty.interpolate({ inputRange: [0, 1], outputRange: [0, 12] });
 
   useEffect(() => {
     (async () => {
@@ -380,7 +422,8 @@ export default function Flashcards() {
   }, []);
 
   const currentCard = cards[current] ?? null;
-  const points = correct * 5 + bestStreak * 2;
+
+  const points = correct * 10 + bestStreak * 5 + (isFinished ? 25 : 0);
 
   const progressPct = useMemo(() => {
     return cards.length ? Math.round((completed.length / cards.length) * 100) : 0;
@@ -410,7 +453,7 @@ export default function Flashcards() {
   function animateFlip(toBack: boolean) {
     Animated.timing(flip, {
       toValue: toBack ? 1 : 0,
-      duration: 400,
+      duration: 420,
       easing: Easing.inOut(Easing.ease),
       useNativeDriver: true,
     }).start(() => setShowBack(toBack));
@@ -442,18 +485,14 @@ export default function Flashcards() {
     if (current > 0) {
       resetFlip();
       setCurrent((i) => i - 1);
-      return;
-    }
-    if (!isFinished) {
-      // optional: router.back();
     }
   }
 
   function popOnce() {
     pop.setValue(1);
     Animated.sequence([
-      Animated.timing(pop, { toValue: 1.04, duration: 120, useNativeDriver: true }),
-      Animated.timing(pop, { toValue: 1, duration: 140, useNativeDriver: true }),
+      Animated.timing(pop, { toValue: 1.05, duration: 120, useNativeDriver: true }),
+      Animated.timing(pop, { toValue: 1, duration: 160, useNativeDriver: true }),
     ]).start();
   }
 
@@ -519,305 +558,367 @@ export default function Flashcards() {
     resetFlip(true);
   }
 
+  // ✅ responsive card sizing (no fixed height that breaks on rotate)
+  // clamp so it never gets too tall or too tiny
+  const maxCardHeight = Math.min(isTablet ? 420 : 340, Math.floor(height * (isLandscape ? 0.55 : 0.38)));
+  const cardHeight = Math.max(isTablet ? 300 : 260, maxCardHeight);
+  const cardWrapHeight = cardHeight + 30;
+
   return (
     <SafeAreaView style={s.safe} edges={["top", "left", "right"]}>
-      <View style={s.container}>
-        {/* Header */}
-        <View style={s.header}>
-          <Text style={[s.h1, rtl]}>{T.title}</Text>
-          <Text style={[s.sub, rtl]}>{T.subtitle}</Text>
+      <LinearGradient colors={["#FFF6D5", "#EAF4FF", "#E9FFF1"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.bg}>
+        {/* background bubbles */}
+        <Animated.View style={[s.bubble, s.b1, { transform: [{ translateY: bubbleShift }] }]} />
+        <Animated.View style={[s.bubble, s.b2, { transform: [{ translateY: bubbleShift2 }] }]} />
+        <Animated.View style={[s.bubble, s.b3, { transform: [{ translateY: bubbleShift }] }]} />
+        <Animated.View style={[s.bubble, s.b4, { transform: [{ translateY: bubbleShift2 }] }]} />
 
-          {/* top stats row - game feel */}
-          <View style={s.headerStatsRow}>
-            <View style={s.pill}>
-              <Ionicons name="flash" size={14} color="#2F6BFF" />
-              <Text style={s.pillTxt}>
-                {T.pointsLbl}: <Text style={{ fontWeight: "900" }}>{points}</Text>
-              </Text>
+        {/* ✅ SCROLLVIEW so rotate never cuts UI */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[
+            s.content,
+            {
+              paddingTop: 12 + insets.top * 0.05,
+              paddingBottom: Math.max(18, insets.bottom + 18),
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          bounces
+        >
+          {/* Header */}
+          <View style={s.header}>
+            <View style={s.titleRow}>
+              <View style={s.mascot}>
+                <Ionicons name="sparkles" size={18} color="#111827" />
+              </View>
+              <Text style={[s.h1, rtl]}>{T.title}</Text>
             </View>
-            <View style={s.pill}>
-              <Ionicons name="flame" size={14} color="#F59E0B" />
-              <Text style={s.pillTxt}>
-                {T.streak}: <Text style={{ fontWeight: "900" }}>{streak}</Text>
-              </Text>
+            <Text style={[s.sub, rtl]}>{T.subtitle}</Text>
+
+            <View style={s.headerStatsRow}>
+              <View style={[s.pill, s.pillSoftBlue]}>
+                <Ionicons name="flash" size={14} color="#2F6BFF" />
+                <Text style={s.pillTxt}>
+                  {T.pointsLbl}: <Text style={{ fontWeight: "900" }}>{points}</Text>
+                </Text>
+              </View>
+
+              <View style={[s.pill, s.pillSoftOrange]}>
+                <Ionicons name="flame" size={14} color="#F59E0B" />
+                <Text style={s.pillTxt}>
+                  {T.streak}: <Text style={{ fontWeight: "900" }}>{streak}</Text>
+                </Text>
+              </View>
+
+              <View style={[s.pill, s.pillSoftGreen]}>
+                <Ionicons name="checkmark-done" size={14} color="#16A34A" />
+                <Text style={s.pillTxt}>
+                  {completed.length}/{cards.length}
+                </Text>
+              </View>
             </View>
-            <View style={s.pill}>
-              <Ionicons name="checkmark-done" size={14} color="#16A34A" />
-              <Text style={s.pillTxt}>
-                {completed.length}/{cards.length}
-              </Text>
+
+            <View style={s.progressOuter}>
+              <LinearGradient
+                colors={["#5B35F2", "#2F6BFF", "#22C55E"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[s.progressInner, { width: `${clampPct(progressPct)}%` }]}
+              />
             </View>
           </View>
 
-          {/* progress */}
-          <View style={s.progressOuter}>
-            <View style={[s.progressInner, { width: `${clampPct(progressPct)}%` }]} />
-          </View>
-        </View>
-
-        {!isFinished ? (
-          <>
-            {/* Flip Card */}
-            <Animated.View style={{ transform: [{ scale: pop }] }}>
-              <View style={s.cardWrap}>
-                {/* Front */}
-                <Animated.View
-                  style={[
-                    s.card,
-                    {
-                      transform: [{ perspective: 1000 }, { rotateY }],
-                      backfaceVisibility: "hidden" as any,
-                    },
-                  ]}
-                >
-                  <View style={s.cardTopRow}>
-                    <View style={[s.tag, s.tagPurple]}>
-                      <Text style={s.tagTxtPurple}>{mode === "practice" ? "Practice" : "Deck"}</Text>
-                    </View>
-                    {!!currentCard?.topic && (
-                      <View style={[s.tag, s.tagBlue]}>
-                        <Text style={s.tagTxtBlue} numberOfLines={1}>
-                          {currentCard.topic}
+          {!isFinished ? (
+            <>
+              {/* Flip Card */}
+              <Animated.View style={{ transform: [{ scale: pop }] }}>
+                <View style={[s.cardWrap, { height: cardWrapHeight }]}>
+                  {/* Front */}
+                  <Animated.View
+                    style={[
+                      s.card,
+                      s.cardFront,
+                      {
+                        height: cardHeight,
+                        transform: [{ perspective: 1000 }, { rotateY }],
+                        backfaceVisibility: "hidden" as any,
+                      },
+                    ]}
+                  >
+                    <View style={s.cardTopRow}>
+                      <View style={[s.tag, mode === "practice" ? s.tagOrange : s.tagPurple]}>
+                        <Text style={mode === "practice" ? s.tagTxtOrange : s.tagTxtPurple}>
+                          {mode === "practice" ? T.practiceLabel : T.deckLabel}
                         </Text>
                       </View>
+
+                      {!!currentCard?.topic && (
+                        <View style={[s.tag, s.tagBlue]}>
+                          <Text style={s.tagTxtBlue} numberOfLines={1}>
+                            {currentCard.topic}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <Text style={[s.label, rtl]}>{T.questionLbl}</Text>
+                    <Text style={[s.big, rtl]}>{currentCard?.front ?? "—"}</Text>
+
+                    <View style={s.tapHint}>
+                      <Ionicons name="hand-left-outline" size={16} color="rgba(17,24,39,0.75)" />
+                      <Text style={[s.tapHintTxt, rtl]}>{T.tapToFlipHint}</Text>
+                    </View>
+                  </Animated.View>
+
+                  {/* Back */}
+                  <Animated.View
+                    style={[
+                      s.card,
+                      s.cardBack,
+                      {
+                        height: cardHeight,
+                        transform: [{ perspective: 1000 }, { rotateY: rotateYBack }],
+                        backfaceVisibility: "hidden" as any,
+                      },
+                    ]}
+                  >
+                    <View style={s.cardTopRow}>
+                      <View style={[s.tag, s.tagGreen]}>
+                        <Text style={s.tagTxtGreen}>{T.answerLbl}</Text>
+                      </View>
+
+                      {!!currentCard?.topic && (
+                        <View style={[s.tag, s.tagBlue]}>
+                          <Text style={s.tagTxtBlue} numberOfLines={1}>
+                            {currentCard.topic}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <Text style={[s.label, rtl]}>{T.answerLbl}</Text>
+                    <Text style={[s.big, rtl]}>{currentCard?.back ?? "—"}</Text>
+
+                    <View style={s.backBadgeRow}>
+                      <View style={s.backBadge}>
+                        <Ionicons name="bulb" size={14} color="#111827" />
+                        <Text style={s.backBadgeTxt}>Nice! Now choose ✅ or ❌</Text>
+                      </View>
+                    </View>
+                  </Animated.View>
+                </View>
+              </Animated.View>
+
+              {/* Controls */}
+              <View style={s.row}>
+                <TouchableOpacity disabled={current === 0} onPress={prevCard} style={[s.btn, s.btnGhost, current === 0 && s.disabled]}>
+                  <Ionicons name="arrow-back" size={18} color="#111827" />
+                  <Text style={[s.btnGhostTxt, rtl]}>{T.prev}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={onShowAnswer} disabled={!currentCard} style={[s.btn, s.btnPrimary, !currentCard && s.disabled]}>
+                  <Ionicons name="swap-horizontal" size={18} color="#fff" />
+                  <Text style={[s.btnPrimaryTxt, rtl]}>{showBack ? T.hideAnswer : T.showAnswer}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={nextCard} disabled={!currentCard} style={[s.btn, s.btnGhost, !currentCard && s.disabled]}>
+                  <Text style={[s.btnGhostTxt, rtl]}>{T.next}</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#111827" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Correct/Incorrect + Ask AI (only when flipped) */}
+              {showBack && (
+                <>
+                  <View style={[s.row, { marginTop: 10 }]}>
+                    <TouchableOpacity onPress={() => mark(true)} style={[s.bigBtn, s.bigBtnGood]}>
+                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                      <Text style={[s.bigBtnTxt, rtl]}>{T.gotIt}</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={() => mark(false)} style={[s.bigBtn, s.bigBtnBad]}>
+                      <Ionicons name="close-circle" size={20} color="#fff" />
+                      <Text style={[s.bigBtnTxt, rtl]}>{T.needsPractice}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={{ marginTop: 10 }}>
+                    <AskAIButton
+                      question={currentCard?.front ?? ""}
+                      userAnswer={currentCard?.back ?? ""}
+                      correctAnswer={currentCard?.back ?? ""}
+                      contextType="flashcard"
+                    />
+                  </View>
+                </>
+              )}
+
+              {/* Practice toggle */}
+              <TouchableOpacity onPress={startNeedsPracticeMode} style={s.practiceToggle}>
+                <Ionicons name="refresh" size={16} color="#111827" />
+                <Text style={[s.practiceToggleText, rtl]}>{T.practiceModeLabel}</Text>
+              </TouchableOpacity>
+
+              {/* Reset */}
+              <View style={{ marginTop: 10 }}>
+                <TouchableOpacity onPress={() => resetSession()} style={s.resetBtn}>
+                  <Ionicons name="reload" size={18} color="#fff" />
+                  <Text style={s.resetTxt}>{T.reset}</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <View style={{ marginTop: 8 }}>
+              <LinearGradient
+                colors={["#FF7A59", "#FFB703", "#2F6BFF", "#5B35F2"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={s.doneBanner}
+              >
+                <View style={s.doneBannerTop}>
+                  <View style={s.doneBadge}>
+                    <Ionicons name={rankIcon as any} size={18} color="#111827" />
+                    <Text style={s.doneBadgeText}>
+                      {T.rank}: {rankLabel}
+                    </Text>
+                  </View>
+                  <View style={s.doneStarsRow}>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Ionicons key={i} name={i < starCount ? "star" : "star-outline"} size={18} color="#FFD54A" />
+                    ))}
+                  </View>
+                </View>
+
+                <Text style={[s.doneTitle, rtl]}>{T.levelComplete}</Text>
+
+                <View style={s.doneScoreRow}>
+                  <View style={s.bigScorePill}>
+                    <Text style={s.bigScoreText}>{resultPct}%</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.doneScore, rtl]}>
+                      {correct} correct • {incorrect} needs practice
+                    </Text>
+                    <View style={s.miniBarOuter}>
+                      <View style={[s.miniBarInner, { width: `${clampPct(resultPct)}%` }]} />
+                    </View>
+                  </View>
+                </View>
+              </LinearGradient>
+
+              <View style={s.doneCardsRow}>
+                <View style={s.smallCard}>
+                  <Text style={s.smallCardTitle}>{T.rewardsTitle}</Text>
+                  <View style={{ gap: 10, marginTop: 10 }}>
+                    <View style={s.rewardRow}>
+                      <View style={s.rewardIcon}>
+                        <Ionicons name="flash" size={16} color="#2F6BFF" />
+                      </View>
+                      <Text style={s.rewardText}>+ {correct * 10} XP</Text>
+                    </View>
+                    <View style={s.rewardRow}>
+                      <View style={s.rewardIcon}>
+                        <Ionicons name="flame" size={16} color="#F59E0B" />
+                      </View>
+                      <Text style={s.rewardText}>Best streak: {bestStreak}</Text>
+                    </View>
+                    <View style={s.rewardRow}>
+                      <View style={s.rewardIcon}>
+                        <Ionicons name="diamond" size={16} color="#5B35F2" />
+                      </View>
+                      <Text style={s.rewardText}>Points: {points}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={s.smallCard}>
+                  <Text style={s.smallCardTitle}>{T.targetsTitle}</Text>
+                  <View style={{ marginTop: 10 }}>
+                    {needsPracticeIds.length === 0 ? (
+                      <Text style={s.targetsText}>{T.noWrong}</Text>
+                    ) : (
+                      <>
+                        <Text style={s.targetsText}>{needsPracticeIds.length} cards to practice</Text>
+                        <View style={{ marginTop: 10, gap: 8 }}>
+                          {baseCards
+                            .filter((c) => needsPracticeIds.includes(c.id))
+                            .slice(0, 3)
+                            .map((c) => (
+                              <View key={c.id} style={s.targetPill}>
+                                <Ionicons name="flag" size={14} color="#111827" />
+                                <Text style={s.targetPillText} numberOfLines={1}>
+                                  {c.topic ?? "Practice"}
+                                </Text>
+                              </View>
+                            ))}
+                        </View>
+                      </>
                     )}
                   </View>
-
-                  <Text style={[s.label, rtl]}>{T.questionLbl}</Text>
-                  <Text style={[s.big, rtl]}>{currentCard?.front ?? "—"}</Text>
-
-                  <View style={s.tapHint}>
-                    <Ionicons name="hand-left-outline" size={16} color="rgba(17,24,39,0.7)" />
-                    <Text style={s.tapHintTxt}>Tap “Show Answer” to flip</Text>
-                  </View>
-                </Animated.View>
-
-                {/* Back */}
-                <Animated.View
-                  style={[
-                    s.card,
-                    s.cardBack,
-                    {
-                      transform: [{ perspective: 1000 }, { rotateY: rotateYBack }],
-                      backfaceVisibility: "hidden" as any,
-                    },
-                  ]}
-                >
-                  <View style={s.cardTopRow}>
-                    <View style={[s.tag, s.tagGreen]}>
-                      <Text style={s.tagTxtGreen}>{T.answerLbl}</Text>
-                    </View>
-                    {!!currentCard?.topic && (
-                      <View style={[s.tag, s.tagBlue]}>
-                        <Text style={s.tagTxtBlue} numberOfLines={1}>
-                          {currentCard.topic}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-
-                  <Text style={[s.label, rtl]}>{T.answerLbl}</Text>
-                  <Text style={[s.big, rtl]}>{currentCard?.back ?? "—"}</Text>
-                </Animated.View>
-              </View>
-            </Animated.View>
-
-            {/* Controls */}
-            <View style={s.row}>
-              <TouchableOpacity
-                disabled={current === 0}
-                onPress={prevCard}
-                style={[s.btn, s.btnGhost, current === 0 && s.disabled]}
-              >
-                <Ionicons name="arrow-back" size={18} color="#111827" />
-                <Text style={[s.btnGhostTxt, rtl]}>{T.prev}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={onShowAnswer}
-                disabled={!currentCard}
-                style={[s.btn, s.btnPrimary, !currentCard && s.disabled]}
-              >
-                <Ionicons name="swap-horizontal" size={18} color="#fff" />
-                <Text style={[s.btnPrimaryTxt, rtl]}>{showBack ? T.hideAnswer : T.showAnswer}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={nextCard}
-                disabled={!currentCard}
-                style={[s.btn, s.btnGhost, !currentCard && s.disabled]}
-              >
-                <Text style={[s.btnGhostTxt, rtl]}>{T.next}</Text>
-                <Ionicons name="arrow-forward" size={18} color="#111827" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Correct / Incorrect + Ask Offklass AI (ONLY HERE, ONLY WHEN FLIPPED) */}
-            {showBack && (
-              <>
-                <View style={[s.row, { marginTop: 10 }]}>
-                  <TouchableOpacity onPress={() => mark(true)} style={[s.bigBtn, s.bigBtnGood]}>
-                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                    <Text style={[s.bigBtnTxt, rtl]}>{T.gotIt}</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity onPress={() => mark(false)} style={[s.bigBtn, s.bigBtnBad]}>
-                    <Ionicons name="close-circle" size={20} color="#fff" />
-                    <Text style={[s.bigBtnTxt, rtl]}>{T.needsPractice}</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={{ marginTop: 10 }}>
-                  <AskAIButton
-                    question={currentCard?.front ?? ""}
-                    userAnswer={currentCard?.back ?? ""}
-                    correctAnswer={currentCard?.back ?? ""}
-                    contextType="flashcard"
-                  />
-                </View>
-              </>
-            )}
-
-            {/* Practice toggle */}
-            <TouchableOpacity onPress={startNeedsPracticeMode} style={s.practiceToggle}>
-              <Ionicons name="refresh" size={16} color="#111827" />
-              <Text style={[s.practiceToggleText, rtl]}>{T.practiceModeLabel}</Text>
-            </TouchableOpacity>
-
-            {/* Reset */}
-            <View style={{ marginTop: 10 }}>
-              <TouchableOpacity onPress={() => resetSession()} style={s.resetBtn}>
-                <Ionicons name="reload" size={18} color="#fff" />
-                <Text style={s.resetTxt}>{T.reset}</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        ) : (
-          // ✅ GAME-Y FINISH SCREEN (like quizzes)
-          <View style={{ marginTop: 8 }}>
-            <LinearGradient
-              colors={["#5B35F2", "#2F6BFF", "#3C5CFF"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={s.doneBanner}
-            >
-              <View style={s.doneBannerTop}>
-                <View style={s.doneBadge}>
-                  <Ionicons name={rankIcon as any} size={18} color="#111827" />
-                  <Text style={s.doneBadgeText}>
-                    {T.rank}: {rankLabel}
-                  </Text>
-                </View>
-                <View style={s.doneStarsRow}>
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Ionicons key={i} name={i < starCount ? "star" : "star-outline"} size={18} color="#FFD54A" />
-                  ))}
                 </View>
               </View>
 
-              <Text style={[s.doneTitle, rtl]}>{T.levelComplete}</Text>
+              {needsPracticeIds.length > 0 && (
+                <TouchableOpacity onPress={startNeedsPracticeMode} style={s.donePracticeBtn}>
+                  <Ionicons name="refresh" size={18} color="#fff" />
+                  <Text style={s.donePracticeText}>{T.practiceWrong}</Text>
+                </TouchableOpacity>
+              )}
 
-              <View style={s.doneScoreRow}>
-                <View style={s.bigScorePill}>
-                  <Text style={s.bigScoreText}>{resultPct}%</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.doneScore, rtl]}>
-                    {correct} correct • {incorrect} needs practice
-                  </Text>
-                  <View style={s.miniBarOuter}>
-                    <View style={[s.miniBarInner, { width: `${clampPct(resultPct)}%` }]} />
-                  </View>
-                </View>
-              </View>
-            </LinearGradient>
+              <TouchableOpacity onPress={() => resetSession()} style={s.doneReplayBtn}>
+                <Ionicons name="play" size={18} color="#fff" />
+                <Text style={s.doneReplayText}>{T.playAgain}</Text>
+              </TouchableOpacity>
 
-            <View style={s.doneCardsRow}>
-              <View style={s.smallCard}>
-                <Text style={s.smallCardTitle}>{T.rewardsTitle}</Text>
-                <View style={{ gap: 10, marginTop: 10 }}>
-                  <View style={s.rewardRow}>
-                    <View style={s.rewardIcon}>
-                      <Ionicons name="flash" size={16} color="#2F6BFF" />
-                    </View>
-                    <Text style={s.rewardText}>+ {correct * 10} XP</Text>
-                  </View>
-                  <View style={s.rewardRow}>
-                    <View style={s.rewardIcon}>
-                      <Ionicons name="flame" size={16} color="#F59E0B" />
-                    </View>
-                    <Text style={s.rewardText}>Best streak: {bestStreak}</Text>
-                  </View>
-                  <View style={s.rewardRow}>
-                    <View style={s.rewardIcon}>
-                      <Ionicons name="diamond" size={16} color="#5B35F2" />
-                    </View>
-                    <Text style={s.rewardText}>Points: {points}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={s.smallCard}>
-                <Text style={s.smallCardTitle}>{T.targetsTitle}</Text>
-                <View style={{ marginTop: 10 }}>
-                  {needsPracticeIds.length === 0 ? (
-                    <Text style={s.targetsText}>{T.noWrong}</Text>
-                  ) : (
-                    <>
-                      <Text style={s.targetsText}>{needsPracticeIds.length} cards to practice</Text>
-                      <View style={{ marginTop: 10, gap: 8 }}>
-                        {baseCards
-                          .filter((c) => needsPracticeIds.includes(c.id))
-                          .slice(0, 3)
-                          .map((c) => (
-                            <View key={c.id} style={s.targetPill}>
-                              <Ionicons name="flag" size={14} color="#111827" />
-                              <Text style={s.targetPillText} numberOfLines={1}>
-                                {c.topic ?? "Practice"}
-                              </Text>
-                            </View>
-                          ))}
-                      </View>
-                    </>
-                  )}
-                </View>
+              <View style={{ marginTop: 12 }}>
+                <NextStepFooter onPlayAgain={() => resetSession()} nextLessonPath="/tabs/lessons" nextQuizPath="/tabs/quizzes" />
               </View>
             </View>
-
-            {needsPracticeIds.length > 0 && (
-              <TouchableOpacity onPress={startNeedsPracticeMode} style={s.donePracticeBtn}>
-                <Ionicons name="refresh" size={18} color="#fff" />
-                <Text style={s.donePracticeText}>{T.practiceWrong}</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity onPress={() => resetSession()} style={s.doneReplayBtn}>
-              <Ionicons name="play" size={18} color="#fff" />
-              <Text style={s.doneReplayText}>{T.playAgain}</Text>
-            </TouchableOpacity>
-
-            <View style={{ marginTop: 12 }}>
-              <NextStepFooter onPlayAgain={() => resetSession()} nextLessonPath="/tabs/lessons" nextQuizPath="/tabs/quizzes" />
-            </View>
-          </View>
-        )}
-      </View>
+          )}
+        </ScrollView>
+      </LinearGradient>
     </SafeAreaView>
   );
 }
 
 /* -------------------------------- Styles --------------------------------- */
 
-const BG = "#EEF4FF";
-const WHITE = "rgba(255,255,255,0.92)";
+const WHITE = "rgba(255,255,255,0.96)";
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
-  container: { flex: 1, backgroundColor: BG, paddingHorizontal: 14, paddingTop: 14 },
+  safe: { flex: 1, backgroundColor: "#EAF4FF" },
+  bg: { flex: 1 },
+
+  // ✅ scroll content container
+  content: { paddingHorizontal: 14 },
+
+  /* background bubbles */
+  bubble: { position: "absolute", borderRadius: 999, opacity: 0.55 },
+  b1: { width: 220, height: 220, backgroundColor: "rgba(47,107,255,0.18)", top: -60, left: -70 },
+  b2: { width: 180, height: 180, backgroundColor: "rgba(34,197,94,0.16)", top: 90, right: -70 },
+  b3: { width: 260, height: 260, backgroundColor: "rgba(255,183,3,0.16)", bottom: -90, left: -80 },
+  b4: { width: 160, height: 160, backgroundColor: "rgba(91,53,242,0.14)", bottom: 90, right: -60 },
 
   header: { alignItems: "center", marginBottom: 10 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  mascot: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
   h1: { fontSize: 22, fontWeight: "900", color: "#111827" },
-  sub: { color: "rgba(17,24,39,0.65)", marginTop: 4, fontWeight: "800" },
+  sub: { color: "rgba(17,24,39,0.68)", marginTop: 6, fontWeight: "800", textAlign: "center" },
 
   headerStatsRow: { marginTop: 10, flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "center" },
   pill: {
@@ -829,41 +930,45 @@ const s = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: WHITE,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)",
   },
-  pillTxt: { color: "#111827", fontWeight: "800" },
+  pillSoftBlue: { borderColor: "rgba(47,107,255,0.18)" },
+  pillSoftOrange: { borderColor: "rgba(245,158,11,0.22)" },
+  pillSoftGreen: { borderColor: "rgba(34,197,94,0.22)" },
+  pillTxt: { color: "#111827", fontWeight: "900" },
 
   progressOuter: {
     marginTop: 10,
-    height: 10,
+    height: 12,
     width: "100%",
     maxWidth: 520,
     borderRadius: 999,
-    backgroundColor: "rgba(47,107,255,0.12)",
+    backgroundColor: "rgba(17,24,39,0.08)",
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
   },
-  progressInner: { height: "100%", borderRadius: 999, backgroundColor: "#5B35F2" },
+  progressInner: { height: "100%", borderRadius: 999 },
 
-  cardWrap: { height: 300, alignItems: "center", justifyContent: "center", marginTop: 10 },
+  cardWrap: { alignItems: "center", justifyContent: "center", marginTop: 10 },
   card: {
     position: "absolute",
     width: "100%",
     maxWidth: 560,
-    height: 280,
-    borderRadius: 22,
+    borderRadius: 24,
     padding: 16,
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.08)",
     shadowColor: "#000",
-    shadowOpacity: 0.10,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 9,
     alignItems: "center",
     justifyContent: "center",
   },
-  cardBack: {},
+  cardFront: { borderColor: "rgba(47,107,255,0.18)" },
+  cardBack: { borderColor: "rgba(34,197,94,0.22)" },
 
   cardTopRow: {
     position: "absolute",
@@ -874,16 +979,19 @@ const s = StyleSheet.create({
     gap: 8,
     justifyContent: "space-between",
   },
+
   tag: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, maxWidth: "68%" },
-  tagPurple: { backgroundColor: "rgba(91,53,242,0.10)", borderColor: "rgba(91,53,242,0.20)" },
+  tagPurple: { backgroundColor: "rgba(91,53,242,0.10)", borderColor: "rgba(91,53,242,0.22)" },
   tagTxtPurple: { color: "#5B35F2", fontWeight: "900" },
-  tagBlue: { backgroundColor: "rgba(47,107,255,0.10)", borderColor: "rgba(47,107,255,0.20)" },
+  tagOrange: { backgroundColor: "rgba(245,158,11,0.12)", borderColor: "rgba(245,158,11,0.26)" },
+  tagTxtOrange: { color: "#B45309", fontWeight: "900" },
+  tagBlue: { backgroundColor: "rgba(47,107,255,0.10)", borderColor: "rgba(47,107,255,0.22)" },
   tagTxtBlue: { color: "#2F6BFF", fontWeight: "900" },
-  tagGreen: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.22)" },
+  tagGreen: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.24)" },
   tagTxtGreen: { color: "#16A34A", fontWeight: "900" },
 
   label: { color: "rgba(17,24,39,0.70)", fontWeight: "900", marginBottom: 8 },
-  big: { color: "#111827", fontSize: 24, fontWeight: "900", textAlign: "center", lineHeight: 30 },
+  big: { color: "#111827", fontSize: 24, fontWeight: "900", textAlign: "center", lineHeight: 32 },
 
   tapHint: {
     position: "absolute",
@@ -893,10 +1001,26 @@ const s = StyleSheet.create({
     gap: 8,
     backgroundColor: "rgba(17,24,39,0.06)",
     paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
   },
-  tapHintTxt: { color: "rgba(17,24,39,0.75)", fontWeight: "900" },
+  tapHintTxt: { color: "rgba(17,24,39,0.78)", fontWeight: "900" },
+
+  backBadgeRow: { position: "absolute", bottom: 12 },
+  backBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(34,197,94,0.12)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.22)",
+  },
+  backBadgeTxt: { color: "#111827", fontWeight: "900" },
 
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 10 },
 
@@ -925,10 +1049,10 @@ const s = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     shadowColor: "#000",
-    shadowOpacity: 0.10,
+    shadowOpacity: 0.12,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    elevation: 7,
   },
   bigBtnGood: { backgroundColor: "#16A34A" },
   bigBtnBad: { backgroundColor: "#DC2626" },
@@ -957,6 +1081,11 @@ const s = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.10,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   resetTxt: { color: "#fff", fontWeight: "900", fontSize: 16 },
 
@@ -968,10 +1097,10 @@ const s = StyleSheet.create({
     padding: 16,
     overflow: "hidden",
     shadowColor: "#000",
-    shadowOpacity: 0.14,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
   },
   doneBannerTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   doneBadge: {
@@ -999,7 +1128,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   bigScoreText: { color: "#fff", fontWeight: "900", fontSize: 22 },
-  doneScore: { color: "rgba(255,255,255,0.92)", fontWeight: "900", fontSize: 16 },
+  doneScore: { color: "rgba(255,255,255,0.95)", fontWeight: "900", fontSize: 16 },
 
   miniBarOuter: {
     marginTop: 8,
@@ -1013,7 +1142,7 @@ const s = StyleSheet.create({
   doneCardsRow: { marginTop: 14, flexDirection: "row", gap: 12 },
   smallCard: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.92)",
+    backgroundColor: "rgba(255,255,255,0.94)",
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
@@ -1032,7 +1161,7 @@ const s = StyleSheet.create({
   },
   rewardText: { color: "#111827", fontWeight: "900" },
 
-  targetsText: { color: "rgba(17,24,39,0.75)", fontWeight: "900" },
+  targetsText: { color: "rgba(17,24,39,0.78)", fontWeight: "900" },
   targetPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -1040,9 +1169,9 @@ const s = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: "rgba(251,191,36,0.18)",
+    backgroundColor: "rgba(255,183,3,0.18)",
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.28)",
+    borderColor: "rgba(255,183,3,0.30)",
   },
   targetPillText: { flex: 1, color: "#111827", fontWeight: "900" },
 

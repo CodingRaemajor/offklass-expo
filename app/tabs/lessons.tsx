@@ -5,13 +5,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Pressable,
   Dimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { Video, ResizeMode } from "expo-av";
+import { Video, ResizeMode, type AVPlaybackStatus } from "expo-av";
 import { router, useLocalSearchParams } from "expo-router";
 
 import Chip from "../../components/Chip";
@@ -146,14 +145,15 @@ const L10N: Record<
     tapToPlay: string;
     back: string;
 
-    // list labels (optional)
     unitsHeading: string;
     videosHeading: string;
+
+    full: string;
   }
 > = {
   English: {
     title: "Lessons",
-    subtitle: "Pick a unit and watch videos.",
+    subtitle: "Pick a unit and watch fun videos ✨",
     subjects: { Math: "Math" },
     units: {
       "All Units": "All Units",
@@ -168,10 +168,11 @@ const L10N: Record<
     back: "Back",
     unitsHeading: "Units",
     videosHeading: "Videos",
+    full: "Full",
   },
   नेपाली: {
     title: "पाठहरू",
-    subtitle: "इकाई छान्नुहोस् र भिडियो हेर्नुहोस्।",
+    subtitle: "इकाई छान्नुहोस् र रमाइला भिडियो हेर्नुहोस् ✨",
     subjects: { Math: "गणित" },
     units: {
       "All Units": "सबै इकाई",
@@ -186,10 +187,11 @@ const L10N: Record<
     back: "फर्कनुहोस्",
     unitsHeading: "इकाईहरू",
     videosHeading: "भिडियोहरू",
+    full: "फुल",
   },
   اردو: {
     title: "اسباق",
-    subtitle: "یونٹ منتخب کریں اور ویڈیوز دیکھیں۔",
+    subtitle: "یونٹ منتخب کریں اور مزے کی ویڈیوز دیکھیں ✨",
     subjects: { Math: "ریاضی" },
     units: {
       "All Units": "تمام اکائیاں",
@@ -204,10 +206,11 @@ const L10N: Record<
     back: "واپس",
     unitsHeading: "یونٹس",
     videosHeading: "ویڈیوز",
+    full: "فل",
   },
   বাংলা: {
     title: "পাঠসমূহ",
-    subtitle: "ইউনিট বাছুন এবং ভিডিও দেখুন।",
+    subtitle: "ইউনিট বাছুন আর মজার ভিডিও দেখুন ✨",
     subjects: { Math: "গণিত" },
     units: {
       "All Units": "সমস্ত ইউনিট",
@@ -222,10 +225,11 @@ const L10N: Record<
     back: "ফিরে যান",
     unitsHeading: "ইউনিট",
     videosHeading: "ভিডিও",
+    full: "ফুল",
   },
   हिन्दी: {
     title: "पाठ",
-    subtitle: "इकाई चुनें और वीडियो देखें।",
+    subtitle: "इकाई चुनें और मज़ेदार वीडियो देखें ✨",
     subjects: { Math: "गणित" },
     units: {
       "All Units": "सभी इकाइयाँ",
@@ -240,8 +244,25 @@ const L10N: Record<
     back: "वापस",
     unitsHeading: "इकाइयाँ",
     videosHeading: "वीडियो",
+    full: "फुल",
   },
 };
+
+/* ----------------------------- Background ------------------------------ */
+
+function FunBackground() {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <View style={[styles.blob, styles.blobA]} />
+      <View style={[styles.blob, styles.blobB]} />
+      <View style={[styles.blob, styles.blobC]} />
+      <View style={[styles.blob, styles.blobD]} />
+      <View style={[styles.star, { top: 58, right: 26 }]} />
+      <View style={[styles.star, { top: 140, left: 18, transform: [{ rotate: "18deg" }] }]} />
+      <View style={[styles.star, { bottom: 120, right: 22, transform: [{ rotate: "-12deg" }] }]} />
+    </View>
+  );
+}
 
 /* ----------------------------- Subcomponents ------------------------------ */
 
@@ -256,8 +277,15 @@ function SoftHeaderCard({
 }) {
   return (
     <View style={styles.headerCard}>
-      <Text style={[styles.headerTitle, rtl]}>{title}</Text>
-      <Text style={[styles.headerSub, rtl]}>{subtitle}</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerBadgeIcon}>
+          <Ionicons name="sparkles" size={18} color={UI.pink} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.headerTitle, rtl]}>{title}</Text>
+          <Text style={[styles.headerSub, rtl]}>{subtitle}</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -275,6 +303,17 @@ function UnitTile({
 }) {
   const isComingSoon = unitDesc.status === "coming-soon";
 
+  const iconName =
+    unitDesc.unit === "Unit 1: Place Value"
+      ? ("calculator-outline" as const)
+      : unitDesc.unit === "Unit 2: Addition & Subtraction"
+        ? ("add-circle-outline" as const)
+        : unitDesc.unit === "Unit 3: Multiplication"
+          ? ("grid-outline" as const)
+          : unitDesc.unit === "Unit 4: Division"
+            ? ("shuffle-outline" as const)
+            : ("pie-chart-outline" as const);
+
   return (
     <Pressable
       onPress={onPress}
@@ -284,14 +323,14 @@ function UnitTile({
       ]}
     >
       <View style={styles.tileIcon}>
-        <Ionicons name="grid-outline" size={22} color={UI.blue} />
+        <Ionicons name={iconName} size={22} color={UI.blue} />
       </View>
 
       <Text style={[styles.tileTitle, rtl]} numberOfLines={2}>
         {unitDesc.title}
       </Text>
 
-      <Text style={[styles.tileSub, rtl]} numberOfLines={2}>
+      <Text style={[styles.tileSub, rtl]} numberOfLines={3}>
         {unitDesc.description}
       </Text>
 
@@ -301,7 +340,10 @@ function UnitTile({
             <Text style={styles.comingSoonText}>{T.comingSoon}</Text>
           </View>
         ) : (
-          <View />
+          <View style={styles.readyBadge}>
+            <Ionicons name="checkmark-circle" size={14} color={UI.green} />
+            <Text style={styles.readyText}>Ready</Text>
+          </View>
         )}
 
         <Ionicons name="chevron-forward" size={18} color={UI.muted} />
@@ -327,15 +369,15 @@ function LessonTile({
         pressed && { transform: [{ scale: 0.99 }], opacity: 0.97 },
       ]}
     >
-      <View style={styles.tileIcon}>
-        <Ionicons name="play-circle-outline" size={24} color={UI.blue} />
+      <View style={[styles.tileIcon, { backgroundColor: UI.yellowSoft }]}>
+        <Ionicons name="play-circle-outline" size={24} color={UI.orange} />
       </View>
 
       <Text style={[styles.tileTitle, rtl]} numberOfLines={2}>
         {lesson.title}
       </Text>
 
-      <Text style={[styles.tileSub, rtl]} numberOfLines={2}>
+      <Text style={[styles.tileSub, rtl]} numberOfLines={3}>
         {lesson.description}
       </Text>
 
@@ -351,7 +393,7 @@ function LessonTile({
   );
 }
 
-/* ------------------------------ Player View (Home-like UI, no progress) ----------------------------- */
+/* ------------------------------ Player View (ONLY FULLSCREEN) ----------------------------- */
 
 function LessonPlayer({
   lesson,
@@ -368,8 +410,21 @@ function LessonPlayer({
 }) {
   const videoRef = useRef<Video>(null);
 
-  // Always mount video (Android tablet fix)
-  const [shouldPlay, setShouldPlay] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  const onStatus = (st: AVPlaybackStatus) => {
+    if (!st.isLoaded) return;
+    setIsLoaded(true);
+  };
+
+  const openFullscreen = async () => {
+    try {
+      // IMPORTANT:
+      // 1) we use Expo fullscreen player so you get the native seek bar there
+      // 2) on some Android devices, seek works reliably only in fullscreen native controls
+      await videoRef.current?.presentFullscreenPlayer();
+    } catch {}
+  };
 
   return (
     <ScrollView
@@ -404,7 +459,7 @@ function LessonPlayer({
               {lesson.unit}
             </Text>
           </View>
-          <View style={styles.playerBadge}>
+          <View style={[styles.playerBadge, { backgroundColor: UI.pinkSoft, borderColor: "rgba(236,72,153,0.20)" }]}>
             <Text style={styles.playerBadgeText} numberOfLines={1}>
               {lesson.topic}
             </Text>
@@ -419,33 +474,38 @@ function LessonPlayer({
         </Text>
       </View>
 
-      <View style={[styles.videoCard, isTablet && { borderRadius: 18 }]}>
+      {/* Video card (simple). Tap FULL to get native controls + seeking. */}
+      <View style={[styles.videoCard, isTablet && { borderRadius: 22 }]}>
         <View style={styles.videoWrap}>
           <Video
             ref={videoRef}
             source={lesson.source}
             style={styles.video}
-            useNativeControls
             resizeMode={ResizeMode.CONTAIN}
-            shouldPlay={shouldPlay}
+            useNativeControls // keep simple; fullscreen will also show native seek
+            onPlaybackStatusUpdate={onStatus}
           />
 
-          {!shouldPlay && (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={styles.videoOverlay}
-              onPress={() => {
-                setShouldPlay(true);
-                setTimeout(() => {
-                  videoRef.current?.playAsync();
-                }, 120);
-              }}
-            >
-              <View style={styles.playCenter}>
-                <Ionicons name="play" size={34} color={UI.blue} />
+          {/* Fullscreen button (only control) */}
+          <Pressable
+            onPress={openFullscreen}
+            style={({ pressed }) => [
+              styles.fullBtn,
+              pressed && { transform: [{ scale: 0.99 }], opacity: 0.95 },
+            ]}
+          >
+            <Ionicons name="expand-outline" size={18} color="#fff" />
+            <Text style={styles.fullBtnText}>{T.full}</Text>
+          </Pressable>
+
+          {/* Gentle hint overlay while not loaded yet */}
+          {!isLoaded && (
+            <View style={styles.hintOverlay} pointerEvents="none">
+              <View style={styles.hintPill}>
+                <Ionicons name="hand-left-outline" size={16} color={UI.text} />
+                <Text style={styles.hintText}>Tap “Full” for best controls</Text>
               </View>
-              <Text style={styles.tapText}>{T.tapToPlay}</Text>
-            </TouchableOpacity>
+            </View>
           )}
         </View>
       </View>
@@ -455,7 +515,7 @@ function LessonPlayer({
 
 /* ----------------------------------- Screen ---------------------------------- */
 
-const BG = "#EEF4FF"; // match home.tsx
+const BG = "#F6F8FF";
 
 export default function Lessons() {
   const insets = useSafeAreaInsets();
@@ -494,27 +554,21 @@ export default function Lessons() {
     return all.find((x) => x.id === params.lessonId) ?? null;
   }, [params.lessonId, subject]);
 
-  // Player view
   if (selectedLesson) {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-        <LessonPlayer
-          lesson={selectedLesson}
-          T={T}
-          rtl={rtl}
-          isTablet={isTablet}
-          paddingX={paddingX}
-        />
+        <FunBackground />
+        <LessonPlayer lesson={selectedLesson} T={T} rtl={rtl} isTablet={isTablet} paddingX={paddingX} />
       </SafeAreaView>
     );
   }
 
-  // List view
   const showAllUnits = unit === "All Units";
   const filteredLessons = showAllUnits ? [] : VIDEO_LESSONS[subject].filter((l) => l.unit === unit);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+      <FunBackground />
       <View style={styles.container}>
         <ScrollView
           style={styles.scroll}
@@ -531,7 +585,6 @@ export default function Lessons() {
         >
           <SoftHeaderCard title={T.title} subtitle={T.subtitle} rtl={rtl} />
 
-          {/* Subject chips */}
           <View style={styles.subRow}>
             {SUBJECTS.map((s) => (
               <View key={s} style={{ flex: 1 }}>
@@ -548,25 +601,18 @@ export default function Lessons() {
             ))}
           </View>
 
-          {/* Unit chips */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
           >
             {UNITS[subject].map((u) => (
-              <Chip
-                key={u}
-                label={T.units[u] ?? u}
-                active={u === unit}
-                onPress={() => setUnit(u)}
-              />
+              <Chip key={u} label={T.units[u] ?? u} active={u === unit} onPress={() => setUnit(u)} />
             ))}
           </ScrollView>
 
           <View style={{ height: 14 }} />
 
-          {/* Tiles (Home-like cards) */}
           <View style={styles.grid}>
             {showAllUnits
               ? UNIT_DESCRIPTIONS[subject].map((unitDesc) => (
@@ -602,14 +648,22 @@ export default function Lessons() {
 
 const UI = {
   bg: BG,
-  text: "#111827",
-  muted: "rgba(17,24,39,0.65)",
+  text: "#0F172A",
+  muted: "rgba(15,23,42,0.62)",
   card: "rgba(255,255,255,0.92)",
-  border: "rgba(0,0,0,0.06)",
+  border: "rgba(2,6,23,0.06)",
   shadow: "#000",
 
-  blue: "#2F6BFF", // same as Home action icons
+  blue: "#2F6BFF",
   blueSoft: "rgba(47,107,255,0.12)",
+
+  pink: "#EC4899",
+  pinkSoft: "rgba(236,72,153,0.12)",
+
+  yellowSoft: "rgba(250,204,21,0.18)",
+  orange: "#F97316",
+
+  green: "#16A34A",
 
   accent: Colors?.purple ?? "#7C3AED",
 
@@ -620,14 +674,32 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
   container: { flex: 1, backgroundColor: BG },
 
-  scroll: { flex: 1, backgroundColor: BG },
+  scroll: { flex: 1, backgroundColor: "transparent" },
   scrollContent: { paddingTop: 16 },
 
-  /* Header card (same feel as Home section) */
+  blob: { position: "absolute", borderRadius: 999, opacity: 0.45 },
+  blobA: { width: 240, height: 240, backgroundColor: "rgba(47,107,255,0.20)", top: -80, left: -70 },
+  blobB: { width: 220, height: 220, backgroundColor: "rgba(236,72,153,0.18)", top: 40, right: -80 },
+  blobC: { width: 260, height: 260, backgroundColor: "rgba(250,204,21,0.18)", bottom: -110, left: -80 },
+  blobD: { width: 220, height: 220, backgroundColor: "rgba(16,185,129,0.14)", bottom: 40, right: -90 },
+
+  star: {
+    position: "absolute",
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    shadowColor: "#000",
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+
   headerCard: {
     width: "100%",
     backgroundColor: UI.card,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 14,
     borderWidth: 1,
     borderColor: UI.border,
@@ -637,32 +709,28 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 6,
   },
-  headerTitle: {
-    color: UI.text,
-    fontWeight: "900",
-    fontSize: 18,
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  headerBadgeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: UI.pinkSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(236,72,153,0.18)",
   },
-  headerSub: {
-    color: UI.muted,
-    fontWeight: "700",
-    marginTop: 4,
-    fontSize: 12.5,
-  },
+  headerTitle: { color: UI.text, fontWeight: "900", fontSize: 18 },
+  headerSub: { color: UI.muted, fontWeight: "800", marginTop: 3, fontSize: 12.5 },
 
   subRow: { flexDirection: "row", gap: 10, marginVertical: 12 },
 
-  /* Grid like Home cards */
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    rowGap: 14,
-  },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 14 },
 
   tile: {
     width: "48%",
     backgroundColor: UI.card,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 14,
     borderWidth: 1,
     borderColor: UI.border,
@@ -674,49 +742,44 @@ const styles = StyleSheet.create({
   },
 
   tileIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 46,
+    height: 46,
+    borderRadius: 16,
     backgroundColor: UI.blueSoft,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(47,107,255,0.16)",
   },
 
-  tileTitle: {
-    color: UI.text,
-    fontWeight: "900",
-    fontSize: 14,
-  },
-  tileSub: {
-    color: UI.muted,
-    fontWeight: "700",
-    marginTop: 4,
-    fontSize: 12,
-    lineHeight: 16,
-  },
+  tileTitle: { color: UI.text, fontWeight: "900", fontSize: 14 },
+  tileSub: { color: UI.muted, fontWeight: "800", marginTop: 4, fontSize: 12, lineHeight: 16 },
 
-  tileFooter: {
-    marginTop: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
+  tileFooter: { marginTop: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
 
   comingSoonBadge: {
-    backgroundColor: "rgba(245,158,11,0.14)",
+    backgroundColor: "rgba(245,158,11,0.16)",
     borderColor: "rgba(245,158,11,0.35)",
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  comingSoonText: {
-    color: "#B45309",
-    fontSize: 11,
-    fontWeight: "900",
+  comingSoonText: { color: "#B45309", fontSize: 11, fontWeight: "900" },
+
+  readyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(22,163,74,0.10)",
+    borderColor: "rgba(22,163,74,0.22)",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
+  readyText: { color: "#14532D", fontSize: 11, fontWeight: "900" },
 
   pill: {
     backgroundColor: "rgba(47,107,255,0.10)",
@@ -727,13 +790,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     maxWidth: 170,
   },
-  pillText: {
-    color: UI.text,
-    fontSize: 11,
-    fontWeight: "900",
-  },
+  pillText: { color: UI.text, fontSize: 11, fontWeight: "900" },
 
-  /* Player */
   backPill: {
     alignSelf: "flex-start",
     flexDirection: "row",
@@ -752,15 +810,11 @@ const styles = StyleSheet.create({
     elevation: 4,
     marginBottom: 12,
   },
-  backPillText: {
-    color: UI.text,
-    fontWeight: "900",
-    fontSize: 13,
-  },
+  backPillText: { color: UI.text, fontWeight: "900", fontSize: 13 },
 
   playerHeaderCard: {
     backgroundColor: UI.card,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 14,
     borderWidth: 1,
     borderColor: UI.border,
@@ -784,11 +838,11 @@ const styles = StyleSheet.create({
   playerBadgeText: { color: UI.text, fontSize: 11, fontWeight: "900" },
 
   playerTitle: { color: UI.text, fontSize: 18, fontWeight: "900", marginBottom: 6 },
-  playerSub: { color: UI.muted, fontSize: 12.5, fontWeight: "700", lineHeight: 17 },
+  playerSub: { color: UI.muted, fontSize: 12.5, fontWeight: "800", lineHeight: 17 },
 
   videoCard: {
     backgroundColor: UI.card,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: UI.border,
     overflow: "hidden",
@@ -798,24 +852,39 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 6,
   },
-  videoWrap: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#DDE7FF" },
+  videoWrap: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#EAF1FF" },
   video: { width: "100%", height: "100%" },
 
-  videoOverlay: {
+  fullBtn: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(17,24,39,0.80)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  fullBtnText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+
+  hintOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.35)",
+    justifyContent: "flex-end",
+    paddingBottom: 12,
   },
-  playCenter: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "rgba(255,255,255,0.92)",
+  hintPill: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "rgba(47,107,255,0.35)",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(2,6,23,0.06)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
-  tapText: { marginTop: 10, color: UI.muted, fontSize: 12, fontWeight: "800" },
+  hintText: { color: UI.text, fontWeight: "900", fontSize: 12 },
 });

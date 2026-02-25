@@ -1,9 +1,18 @@
 import React from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Dimensions, Platform } from "react-native";
 import { Colors } from "../lib/colors";
 
-// Cap bubble width for tablets so text never stretches or cuts
 const MAX_WIDTH = Math.min(Dimensions.get("window").width * 0.78, 420);
+
+function parseMessage(text: string) {
+  // Split text by triple backticks ```
+  const parts = text.split("```");
+
+  return parts.map((part, index) => ({
+    type: index % 2 === 1 ? "code" : "text",
+    content: part.trim(),
+  }));
+}
 
 export default function ChatBubble({
   role,
@@ -13,6 +22,7 @@ export default function ChatBubble({
   text: string;
 }) {
   const isUser = role === "user";
+  const parts = parseMessage(text);
 
   return (
     <View style={[styles.wrap, { alignItems: isUser ? "flex-end" : "flex-start" }]}>
@@ -23,15 +33,30 @@ export default function ChatBubble({
           { maxWidth: MAX_WIDTH },
         ]}
       >
-        <Text
-          style={[
-            styles.text,
-            { color: isUser ? "white" : Colors.text },
-          ]}
-          selectable
-        >
-          {text}
-        </Text>
+        {parts.map((part, index) => {
+          if (part.type === "code") {
+            return (
+              <View key={index} style={styles.codeBlock}>
+                <Text style={styles.codeText} selectable>
+                  {part.content}
+                </Text>
+              </View>
+            );
+          }
+
+          return (
+            <Text
+              key={index}
+              style={[
+                styles.text,
+                { color: isUser ? "white" : Colors.text },
+              ]}
+              selectable
+            >
+              {part.content}
+            </Text>
+          );
+        })}
       </View>
     </View>
   );
@@ -63,7 +88,25 @@ const styles = StyleSheet.create({
 
   text: {
     fontSize: 15,
-    lineHeight: 22,        // ⭐ prevents cramped math steps
-    flexWrap: "wrap",     // ⭐ ensures no cut text
+    lineHeight: 22,
+    flexWrap: "wrap",
+  },
+
+  codeBlock: {
+    marginTop: 6,
+    padding: 10,
+    backgroundColor: "#F4F6FA",
+    borderRadius: 8,
+  },
+
+  codeText: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: Platform.select({
+      ios: "Menlo",
+      android: "monospace",
+      default: "monospace",
+    }),
+    color: "#111",
   },
 });
