@@ -1,8 +1,13 @@
 // lib/ai.local.ts
 import { initLlama, type LlamaContext } from "llama.rn";
-import { ensureModel, isModelDownloaded, type ModelChoice } from "./LocalModel";
 import Constants from "expo-constants";
 import { tryMathFallback } from "./mathFallback";
+import {
+  ensureModel,
+  isModelDownloaded,
+  type ModelChoice,
+  type DownloadProgress,
+} from "./LocalModel";
 
 export type Message = {
   id: string;
@@ -10,61 +15,55 @@ export type Message = {
   content: string;
 };
 
+/* ------------------ INTERNAL STATE ------------------ */
+
+type AIState = "idle" | "downloading" | "loading" | "ready" | "error";
+
 let ctx: LlamaContext | null = null;
 let loadedModel: ModelChoice | null = null;
 let inflight: Promise<Message> | null = null;
 
-/* ------------------ REFINED TEACHER PROMPT (ORIGINAL) ------------------ */
+let aiState: AIState = "idle";
+let aiProgress: DownloadProgress | null = null;
+let aiError: string | null = null;
 
+const listeners = new Set<() => void>();
+function notify() {
+  for (const fn of listeners) fn();
+}
+
+export function subscribeAIStatus(fn: () => void) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+export function getAIStatus() {
+  return { aiState, aiProgress, aiError, hasCtx: !!ctx };
+}
+
+function setState(next: AIState, err?: string | null) {
+  aiState = next;
+  aiError = err ?? null;
+  notify();
+}
+
+/* ------------------ REFINED TEACHER PROMPT (OPTIONAL) ------------------ */
+/**
+ * You had getSystemPrompt before, but you weren't using it in chat completion.
+ * Keeping it here in case you later want to inject a system prompt.
+ */
 function getSystemPrompt(grade: number, languageName: string, concept: string): string {
   return `
-You are Offklass AI: a warm, patient math teacher who loves when students ask questions. You explain to a grade ${grade} student in ${languageName}. Use VERY SIMPLE words like you're talking to a 5-year-old.
+You are Offklass AI: a warm, patient math teacher who loves when students ask questions.
+You explain to a grade ${grade} student in ${languageName}. Use VERY SIMPLE words.
 
-Before you explain, briefly encourage them (e.g. "Great question!" or "I'm so glad you asked—that's how we learn!"). Then explain the concept. Be kind and supportive so they feel safe to keep asking.
+Before you explain, briefly encourage them. Then explain the concept kindly.
 
 The concept to explain: "${concept}"
 
-EXPLANATION RULES - Write on the board step-by-step (VERY SIMPLE):
-1. Stack the numbers (standard way)
-2. Show the solving process step by step
-3. Write what you're doing: "0 plus 0 is 0" then show the result
-4. Keep it SHORT - minimal text, just the math steps
-5. NO deep explanations - just show how to solve
-6. Use VERY simple language - no math jargon, use words like "add" not "addition", "take away" not "subtract"
-7. Write like you're solving on a board: "First...", "Next...", "Then..."
-8. Use words a 5-year-old would understand
-
-EXAMPLES OF SIMPLE EXPLANATIONS:
-
-For "Addition":
-"Let me show you:
-  3
-+ 2
----
-  ___
-  
-First, ones: 3 plus 2 is 5
-Write 5:
-  3
-+ 2
----
-  5"
-
-For "Multiplication":
-"Let me solve this:
-  3
-× 4
----
-  ___
-  
-4 times 3 is 12
-Write 12:
-  3
-× 4
----
- 12"
-
-Provide a clear, SIMPLE step-by-step explanation that a grade ${grade} student can easily follow.
+EXPLANATION RULES:
+- Show steps like a board: First... Next... Then...
+- Minimal text, no jargon.
 `.trim();
 }
 
@@ -84,27 +83,62 @@ function formatMessagesForGemma(messages: Message[], systemPrompt: string = ""):
   return out;
 }
 
+/* ------------------ CONTEXT / MODEL LIFECYCLE ------------------ */
+
 async function getContext(choice: ModelChoice = "gemma2b"): Promise<LlamaContext> {
-  if (Constants.appOwnership === "expo") throw new Error("Local AI requires a Development Build.");
+  if (Constants.appOwnership === "expo") {
+    throw new Error("Local AI requires a Development Build.");
+  }
+
   if (ctx && loadedModel === choice) return ctx;
 
-  const modelPath = await ensureModel();
+  // Download if needed
+  const already = await isModelDownloaded();
+  if (!already) setState("downloading");
 
+  const modelPath = await ensureModel((p) => {
+    aiProgress = p;
+    if (aiState !== "downloading") aiState = "downloading";
+    notify();
+  });
+
+  // Release old ctx if any
   if (ctx) {
     try {
       await ctx.release();
     } catch {}
   }
 
+  // Small delay helps Android filesystem settle after moveAsync
+  await new Promise((r) => setTimeout(r, 350));
+
+  setState("loading");
+
+  // ✅ IMPORTANT: use_mlock true can cause memory crashes / app restarts on Android
   ctx = await initLlama({
     model: modelPath,
-    n_ctx: 2048,
+    n_ctx: 1024, // safer for phones; raise later if stable
     n_threads: 4,
-    use_mlock: true,
+    use_mlock: false,
   });
 
   loadedModel = choice;
+  aiProgress = null;
+  setState("ready");
   return ctx;
+}
+
+/**
+ * Screen should call this once on mount.
+ * It will download + init, and keep aiState updated.
+ */
+export async function prepareAI(): Promise<void> {
+  try {
+    await getContext("gemma2b");
+  } catch (e: any) {
+    setState("error", String(e?.message ?? e));
+    throw e;
+  }
 }
 
 /* ------------------ QUIZ GENERATION ------------------ */
@@ -122,7 +156,7 @@ const QUIZ_GENERATION_PROMPT = `
 You are Offklass AI. Create 5 multiple choice questions for Grade 4.
 Use the transcript to create REAL math options.
 
-### GOOD EXAMPLE TO FOLLOW ###
+### GOOD EXAMPLE ###
 Question: In the number 47, what does the 4 represent?
 A: 4 ones
 B: 4 tens
@@ -132,8 +166,8 @@ Answer: 4 tens
 Explanation: The 4 is in the tens place, so it represents 4 tens.
 
 ### RULES ###
-1. Options must be specific values (like "40" or "7 ones"), NOT just "1, 2, 3, 4".
-2. The "Answer" must be the text of the correct option.
+1. Options must be specific values, NOT "1,2,3,4".
+2. The Answer must be the text of the correct option.
 3. Keep it very simple.
 
 Transcript:
@@ -155,10 +189,6 @@ export async function generateQuizFromTranscript(
       top_p: 0.1,
     });
 
-    console.log("--- AI RAW RESPONSE START ---");
-    console.log(text);
-    console.log("--- AI RAW RESPONSE END ---");
-
     return parseQuizResponse(text.trim(), lessonTitle, topic);
   } catch (err) {
     console.error("Quiz generation error:", err);
@@ -166,13 +196,10 @@ export async function generateQuizFromTranscript(
   }
 }
 
-function parseQuizResponse(response: string, lessonTitle: string, topic: string): GeneratedQuestion[] {
+function parseQuizResponse(response: string, _lessonTitle: string, topic: string): GeneratedQuestion[] {
   const questions: GeneratedQuestion[] = [];
 
-  const cleanResponse = response
-    .replace(/\*\*/g, "")
-    .replace(/Question\s*\d+:/gi, "Question:");
-
+  const cleanResponse = response.replace(/\*\*/g, "").replace(/Question\s*\d+:/gi, "Question:");
   const rawBlocks = cleanResponse.split(/Question:/i).filter((b) => b.trim().length > 10);
 
   rawBlocks.forEach((block, index) => {
@@ -202,9 +229,7 @@ function parseQuizResponse(response: string, lessonTitle: string, topic: string)
       if (questionText && optA && optB && optC && optD && answerLine) {
         const options = [optA, optB, optC, optD];
 
-        let correctIndex = -1;
-
-        correctIndex = options.findIndex(
+        let correctIndex = options.findIndex(
           (opt) =>
             answerLine.toLowerCase().includes(opt.toLowerCase()) ||
             opt.toLowerCase().includes(answerLine.toLowerCase())
@@ -212,9 +237,7 @@ function parseQuizResponse(response: string, lessonTitle: string, topic: string)
 
         if (correctIndex === -1) {
           const firstChar = answerLine.charAt(0).toUpperCase();
-          if (["A", "B", "C", "D"].includes(firstChar)) {
-            correctIndex = firstChar.charCodeAt(0) - 65;
-          }
+          if (["A", "B", "C", "D"].includes(firstChar)) correctIndex = firstChar.charCodeAt(0) - 65;
         }
 
         if (correctIndex >= 0 && correctIndex <= 3) {
@@ -244,6 +267,18 @@ function isGreeting(text: string): boolean {
 }
 
 export async function callAI(history: Message[]): Promise<Message> {
+  // ✅ HARD GATE: never attempt generation while downloading/loading/error
+  if (aiState === "downloading") {
+    const pct = aiProgress ? `${aiProgress.percent.toFixed(1)}%` : "";
+    return { id: "dl", role: "assistant", content: `Downloading my AI brain… 🧠 ${pct}`.trim() };
+  }
+  if (aiState === "loading") {
+    return { id: "ld", role: "assistant", content: "Warming up… 🔥 Almost ready!" };
+  }
+  if (aiState === "error") {
+    return { id: "err", role: "assistant", content: "AI isn’t ready. Tap Retry to fix me." };
+  }
+
   if (inflight) return { id: "busy", role: "assistant", content: "I'm still calculating..." };
 
   const lastUser = [...history].reverse().find((m) => m.role === "user");
@@ -257,30 +292,29 @@ export async function callAI(history: Message[]): Promise<Message> {
     };
   }
 
-  // ✅ MATH FALLBACK (now supports advanced expressions + equations offline)
+  // ✅ MATH FALLBACK
   if (lastUser) {
     const fallback = tryMathFallback(lastUser.content);
     if (fallback) {
-      return {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: fallback,
-      };
+      return { id: Date.now().toString(), role: "assistant", content: fallback };
     }
   }
 
   inflight = (async () => {
     try {
       const engine = await getContext("gemma2b");
+
       const { text } = await engine.completion({
         prompt: formatMessagesForGemma(history.slice(-4)),
-        n_predict: 600,
+        n_predict: 500,
         temperature: 0,
         top_p: 0.1,
         stop: ["<end_of_turn>", "<eos>"],
       });
+
       return { id: Date.now().toString(), role: "assistant", content: text.trim() };
-    } catch (err) {
+    } catch (e: any) {
+      setState("error", String(e?.message ?? e ?? "AI Error"));
       return { id: "error", role: "assistant", content: "AI Error" };
     } finally {
       inflight = null;
@@ -299,9 +333,14 @@ export async function warmupAI(): Promise<void> {
 }
 
 export async function releaseContext(): Promise<void> {
-  if (ctx) {
-    await ctx.release();
-    ctx = null;
-    loadedModel = null;
+  try {
+    if (ctx) {
+      await ctx.release();
+      ctx = null;
+      loadedModel = null;
+    }
+  } finally {
+    aiProgress = null;
+    setState("idle");
   }
 }

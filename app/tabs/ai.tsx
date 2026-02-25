@@ -13,14 +13,24 @@ import {
   Animated,
   Easing,
   Modal,
-  Keyboard,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import ChatBubble from "../../components/ChatBubble";
-import { callAI, type Message } from "../../lib/ai.local";
-import { loadJSON, saveJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
+import {
+  callAI,
+  prepareAI,
+  getAIStatus,
+  subscribeAIStatus,
+  type Message,
+} from "../../lib/ai.local";
+import {
+  loadJSON,
+  saveJSON,
+  ONBOARD_KEY,
+  type OnboardingData,
+} from "../../lib/storage";
 
 /* --------------------------- Playful “Kid Teacher” UI --------------------------- */
 
@@ -66,7 +76,8 @@ const L10N: Record<
     title: "Offklass Buddy",
     subtitle: "Let's learn together!",
     placeholder: "Ask me anything...",
-    greeting: "Hi there! 👋 I'm your Offklass Buddy. Tell me your grade and what we're learning today!",
+    greeting:
+      "Hi there! 👋 I'm your Offklass Buddy. Tell me your grade and what we're learning today!",
     aiBusy: "Oops! I'm thinking too hard. Try again!",
     fallback: "I couldn't find the answer. Let's try another way!",
     tipLabel: "Ideas",
@@ -79,7 +90,8 @@ const L10N: Record<
     title: "Offklass साथी",
     subtitle: "सँगै सिकौं!",
     placeholder: "केही सोध्नुहोस्...",
-    greeting: "नमस्ते! म Offklass शिक्षक हुँ। आफ्नो कक्षा र आज के सिक्न चाहनुहुन्छ भन्नुहोस्।",
+    greeting:
+      "नमस्ते! म Offklass शिक्षक हुँ। आफ्नो कक्षा र आज के सिक्न चाहनुहुन्छ भन्नुहोस्।",
     aiBusy: "एआई व्यस्त छ। फेरि प्रयास गर्नुहोस्!",
     fallback: "म जवाफ सोच्न सकिनँ।",
     tipLabel: "टिप",
@@ -92,7 +104,8 @@ const L10N: Record<
     title: "Offklass ساتھی",
     subtitle: "آئیے مل کر سیکھتے ہیں!",
     placeholder: "کچھ پوچھیں...",
-    greeting: "سلام! میں آپ کا Offklass ٹیچر ہوں۔ اپنی جماعت بتائیں۔",
+    greeting:
+      "سلام! میں آپ کا Offklass ٹیچر ہوں۔ اپنی جماعت بتائیں۔",
     aiBusy: "اے آئی مصروف ہے۔ دوبارہ کوشش کریں!",
     fallback: "میں جواب نہیں سوچ سکا۔",
     tipLabel: "آئیڈیاز",
@@ -105,7 +118,8 @@ const L10N: Record<
     title: "Offklass বন্ধু",
     subtitle: "চলো একসাথে শিখি!",
     placeholder: "কিছু জিজ্ঞাসা করো...",
-    greeting: "হাই! আমি আপনার Offklass শিক্ষক। আপনার ক্লাস ও আজ কী শিখতে চান বলুন।",
+    greeting:
+      "হাই! আমি আপনার Offklass শিক্ষক। আপনার ক্লাস ও আজ কী শিখতে চান বলুন।",
     aiBusy: "এআই ব্যস্ত। আবার চেষ্টা করুন!",
     fallback: "আমি উত্তর ভাবতে পারিনি।",
     tipLabel: "টিপস",
@@ -118,7 +132,8 @@ const L10N: Record<
     title: "Offklass Buddy",
     subtitle: "चलो साथ पढ़ते हैं!",
     placeholder: "कुछ भी पूछो...",
-    greeting: "हाय! मैं आपका Offklass Buddy हूँ। अपनी कक्षा और आज क्या सीखना चाहते हैं बताइए।",
+    greeting:
+      "हाय! मैं आपका Offklass Buddy हूँ। अपनी कक्षा और आज क्या सीखना चाहते हैं बताइए।",
     aiBusy: "AI busy है। फिर से try करें!",
     fallback: "मैं answer नहीं सोच पाया।",
     tipLabel: "Ideas",
@@ -135,13 +150,31 @@ const STORE_KEY = "chat:offklass";
 
 const KidBackground = () => (
   <View style={StyleSheet.absoluteFill} pointerEvents="none">
-    <View style={[styles.blob, { top: -50, right: -50, backgroundColor: "#DBEAFE", width: 220, height: 220 }]} />
-    <View style={[styles.blob, { bottom: 110, left: -70, backgroundColor: "#EDE9FE", width: 170, height: 170 }]} />
-    <View style={[styles.blob, { top: "42%", right: -35, backgroundColor: "#FEF3C7", width: 90, height: 90 }]} />
+    <View
+      style={[
+        styles.blob,
+        { top: -50, right: -50, backgroundColor: "#DBEAFE", width: 220, height: 220 },
+      ]}
+    />
+    <View
+      style={[
+        styles.blob,
+        { bottom: 110, left: -70, backgroundColor: "#EDE9FE", width: 170, height: 170 },
+      ]}
+    />
+    <View
+      style={[
+        styles.blob,
+        { top: "42%", right: -35, backgroundColor: "#FEF3C7", width: 90, height: 90 },
+      ]}
+    />
   </View>
 );
 
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err?: any }> {
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { err?: any }
+> {
   constructor(props: any) {
     super(props);
     this.state = {};
@@ -154,7 +187,9 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
       return (
         <SafeAreaView style={{ flex: 1, backgroundColor: UI.bg }}>
           <View style={{ padding: 20 }}>
-            <Text style={{ fontSize: 20, fontWeight: "900", color: UI.red }}>Oopsie!</Text>
+            <Text style={{ fontSize: 20, fontWeight: "900", color: UI.red }}>
+              Oopsie!
+            </Text>
             <Text style={{ color: UI.subtext, marginTop: 8 }}>
               {String(this.state.err?.message ?? this.state.err)}
             </Text>
@@ -172,12 +207,42 @@ type TipItem = { key: string; title: string; text: string; icon: any };
 
 function getTips(_lang: Lang): TipItem[] {
   return [
-    { key: "steps", title: "Step-by-Step", text: "Explain this step-by-step using simple words for my grade.", icon: "footsteps" },
-    { key: "mistakes", title: "Watch Out!", text: "What are common mistakes students make with this?", icon: "warning" },
-    { key: "example", title: "Example", text: "Show one example and solve it with me.", icon: "bulb" },
-    { key: "check", title: "Check it!", text: "Show a quick way to check the answer.", icon: "checkmark-circle" },
-    { key: "quizme", title: "Challenge Me", text: "Give me a 3-question mini quiz on this topic!", icon: "trophy" },
-    { key: "simpler", title: "Simpler!", text: "Explain it like I'm new to this (super simple).", icon: "happy" },
+    {
+      key: "steps",
+      title: "Step-by-Step",
+      text: "Explain this step-by-step using simple words for my grade.",
+      icon: "footsteps",
+    },
+    {
+      key: "mistakes",
+      title: "Watch Out!",
+      text: "What are common mistakes students make with this?",
+      icon: "warning",
+    },
+    {
+      key: "example",
+      title: "Example",
+      text: "Show one example and solve it with me.",
+      icon: "bulb",
+    },
+    {
+      key: "check",
+      title: "Check it!",
+      text: "Show a quick way to check the answer.",
+      icon: "checkmark-circle",
+    },
+    {
+      key: "quizme",
+      title: "Challenge Me",
+      text: "Give me a 3-question mini quiz on this topic!",
+      icon: "trophy",
+    },
+    {
+      key: "simpler",
+      title: "Simpler!",
+      text: "Explain it like I'm new to this (super simple).",
+      icon: "happy",
+    },
   ];
 }
 
@@ -219,13 +284,25 @@ export default function OffklassAI() {
     tipFade.setValue(0);
     tipScale.setValue(0.9);
     Animated.parallel([
-      Animated.timing(tipFade, { toValue: 1, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      Animated.spring(tipScale, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
+      Animated.timing(tipFade, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(tipScale, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
     ]).start();
   }
 
   function closeTips() {
-    Animated.timing(tipFade, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => setTipOpen(false));
+    Animated.timing(tipFade, { toValue: 0, duration: 150, useNativeDriver: true }).start(() =>
+      setTipOpen(false)
+    );
   }
 
   function applyTip(text: string) {
@@ -235,16 +312,28 @@ export default function OffklassAI() {
     });
     closeTips();
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
-    setTimeout(() => inputRef.current?.focus(), 120); // keep keyboard + input up
+    setTimeout(() => inputRef.current?.focus(), 120);
   }
 
-  // ✅ KEYBOARD FIX: keep composer above keyboard AND auto-scroll on focus
+  // ✅ AI STATUS GATE (download -> load -> ready)
+  const [ai, setAi] = useState(getAIStatus());
+
+  useEffect(() => {
+    const unsub = subscribeAIStatus(() => setAi(getAIStatus()));
+    // start preparing immediately when tab opens
+    prepareAI().catch(() => {});
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  const isReady = ai.aiState === "ready";
+
+  // ✅ KEYBOARD FIX
   const keyboardBehavior = Platform.OS === "ios" ? "padding" : "height";
-  // give a little offset so it doesn’t jump under header/notch (tweak if needed)
   const keyboardOffset = Platform.OS === "ios" ? 0 : Math.max(0, insets.top);
 
   function onFocusInput() {
-    // If list is long, make sure latest messages + composer are visible
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
   }
 
@@ -298,17 +387,24 @@ export default function OffklassAI() {
 
     setTimeout(() => {
       listRef.current?.scrollToEnd({ animated: true });
-      inputRef.current?.focus(); // bring up keyboard + composer
+      inputRef.current?.focus();
     }, 160);
   }, [params.question]);
 
   function replaceTypingBubbleWith(text: string) {
-    setMessages((m) => m.map((msg) => (msg.id.endsWith("-typing") ? { ...msg, id: String(Date.now()), content: text } : msg)));
+    setMessages((m) =>
+      m.map((msg) =>
+        msg.id.endsWith("-typing") ? { ...msg, id: String(Date.now()), content: text } : msg
+      )
+    );
   }
 
   async function onSend() {
     const text = input.trim();
     if (!text || sending) return;
+
+    // ✅ HARD GATE: don't send while downloading/loading/error
+    if (!isReady) return;
 
     setInput("");
     const userMsg: Message = { id: Date.now().toString(), role: "user", content: text };
@@ -316,12 +412,12 @@ export default function OffklassAI() {
     setMessages((m) => [...m, userMsg, { id: `${Date.now()}-typing`, role: "assistant", content: "..." }]);
     setSending(true);
 
-    // keep view stable when sending
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
 
     try {
       const reply = await callAI([...messages.slice(-4), userMsg]);
-      const content = typeof reply?.content === "string" && reply.content.trim().length ? reply.content.trim() : T.fallback;
+      const content =
+        typeof reply?.content === "string" && reply.content.trim().length ? reply.content.trim() : T.fallback;
       replaceTypingBubbleWith(content);
     } catch {
       replaceTypingBubbleWith(T.aiBusy);
@@ -336,12 +432,7 @@ export default function OffklassAI() {
       <SafeAreaView style={{ flex: 1, backgroundColor: UI.bg }} edges={["top", "left", "right"]}>
         <KidBackground />
 
-        {/* ✅ This is what keeps the input ABOVE the keyboard */}
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={keyboardBehavior as any}
-          keyboardVerticalOffset={keyboardOffset}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardBehavior as any} keyboardVerticalOffset={keyboardOffset}>
           {/* Header */}
           <View style={styles.headerWrap}>
             <View style={styles.headerCard}>
@@ -352,8 +443,18 @@ export default function OffklassAI() {
               <View style={{ flex: 1, alignItems: "center" }}>
                 <Text style={[styles.title, rtl]}>{T.title}</Text>
                 <View style={styles.statusBadge}>
-                  <View style={styles.statusDot} />
-                  <Text style={[styles.subtitle, rtl]}>{T.subtitle}</Text>
+                  <View style={[styles.statusDot, { backgroundColor: isReady ? UI.green : UI.yellow }]} />
+                  <Text style={[styles.subtitle, rtl]}>
+                    {isReady
+                      ? T.subtitle
+                      : ai.aiState === "downloading"
+                      ? "Downloading AI…"
+                      : ai.aiState === "loading"
+                      ? "Loading AI…"
+                      : ai.aiState === "error"
+                      ? "AI needs retry"
+                      : "Preparing…"}
+                  </Text>
                 </View>
               </View>
 
@@ -400,28 +501,30 @@ export default function OffklassAI() {
               <TextInput
                 ref={inputRef}
                 style={[styles.input, rtl]}
-                placeholder={T.placeholder}
+                placeholder={isReady ? T.placeholder : "AI is getting ready…"}
                 placeholderTextColor={UI.muted}
                 value={input}
                 onChangeText={setInput}
-                onFocus={onFocusInput} // ✅ scroll + keep input visible when typing
+                onFocus={onFocusInput}
                 multiline
                 returnKeyType="send"
                 blurOnSubmit={false}
+                editable={isReady} // ✅ lock typing until ready (prevents kids confusion)
                 onSubmitEditing={() => {
-                  // On Android multiline doesn't always submit; this still helps sometimes.
                   if (input.trim().length) onSend();
                 }}
               />
 
               <Pressable
                 onPress={() => {
-                  // Ensure keyboard stays open and input stays visible
                   inputRef.current?.focus();
                   onSend();
                 }}
-                disabled={sending || !input.trim()}
-                style={[styles.sendBtn, (sending || !input.trim()) && { opacity: 0.5 }]}
+                disabled={sending || !input.trim() || !isReady}
+                style={[
+                  styles.sendBtn,
+                  (sending || !input.trim() || !isReady) && { opacity: 0.5 },
+                ]}
               >
                 {sending ? <ActivityIndicator color="#fff" /> : <Ionicons name="paw" size={20} color="#fff" />}
               </Pressable>
@@ -452,6 +555,44 @@ export default function OffklassAI() {
               </Animated.View>
             </Pressable>
           </Modal>
+
+          {/* ✅ AI Gate Overlay (download/load/error) */}
+          {!isReady && (
+            <View style={styles.aiGate} pointerEvents="auto">
+              <View style={styles.aiGateCard}>
+                <Ionicons name="sparkles" size={26} color={UI.purple} />
+                <Text style={styles.aiGateTitle}>
+                  {ai.aiState === "downloading"
+                    ? "Downloading your AI Buddy… 🧠"
+                    : ai.aiState === "loading"
+                    ? "Warming up… 🔥"
+                    : ai.aiState === "error"
+                    ? "AI needs help 🛠️"
+                    : "Getting ready…"}
+                </Text>
+
+                {ai.aiState === "downloading" && (
+                  <Text style={styles.aiGateSub}>
+                    {ai.aiProgress ? `${ai.aiProgress.percent.toFixed(1)}%` : "Starting download…"}
+                  </Text>
+                )}
+
+                {ai.aiState === "loading" && (
+                  <Text style={styles.aiGateSub}>Almost ready! Please wait…</Text>
+                )}
+
+                {ai.aiState === "error" && (
+                  <>
+                    <Text style={styles.aiGateSub}>{ai.aiError ?? "Something went wrong."}</Text>
+                    <Pressable onPress={() => prepareAI().catch(() => {})} style={styles.retryBtn}>
+                      <Ionicons name="refresh" size={18} color="#fff" />
+                      <Text style={styles.retryText}>Retry</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </View>
+          )}
         </KeyboardAvoidingView>
       </SafeAreaView>
     </ErrorBoundary>
@@ -573,4 +714,52 @@ const styles = StyleSheet.create({
   },
   tipRowTitle: { fontSize: 15, fontWeight: "900", color: UI.text },
   tipRowText: { fontSize: 12, fontWeight: "700", color: UI.subtext, marginTop: 2, lineHeight: 16 },
+
+  // ✅ AI Gate overlay styles
+  aiGate: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(240,247,255,0.75)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  aiGateCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "rgba(255,255,255,0.98)",
+    borderRadius: 28,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: "#fff",
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    alignItems: "center",
+    gap: 10,
+  },
+  aiGateTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: UI.text,
+    textAlign: "center",
+  },
+  aiGateSub: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: UI.subtext,
+    textAlign: "center",
+  },
+  retryBtn: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: UI.purple,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
+  },
+  retryText: { color: "#fff", fontWeight: "900" },
 });
