@@ -1,11 +1,20 @@
 import React from "react";
-import { View, Text, StyleSheet, Dimensions, Platform } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  Platform,
+  ScrollView,
+} from "react-native";
 import { Colors } from "../lib/colors";
 
-const MAX_WIDTH = Math.min(Dimensions.get("window").width * 0.78, 420);
+const SCREEN_WIDTH = Dimensions.get("window").width;
+
+// ✅ Bigger max width (was 78%)
+const MAX_WIDTH = Math.min(SCREEN_WIDTH * 0.92, 600);
 
 function parseMessage(text: string) {
-  // Split text by triple backticks ```
   const parts = text.split("```");
 
   return parts.map((part, index) => ({
@@ -25,7 +34,12 @@ export default function ChatBubble({
   const parts = parseMessage(text);
 
   return (
-    <View style={[styles.wrap, { alignItems: isUser ? "flex-end" : "flex-start" }]}>
+    <View
+      style={[
+        styles.wrap,
+        { alignItems: isUser ? "flex-end" : "flex-start" },
+      ]}
+    >
       <View
         style={[
           styles.bubble,
@@ -36,11 +50,18 @@ export default function ChatBubble({
         {parts.map((part, index) => {
           if (part.type === "code") {
             return (
-              <View key={index} style={styles.codeBlock}>
-                <Text style={styles.codeText} selectable>
-                  {part.content}
-                </Text>
-              </View>
+              <ScrollView
+                key={index}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.codeScroll}
+              >
+                <View style={styles.codeBlock}>
+                  <Text style={styles.codeText} selectable>
+                    {part.content}
+                  </Text>
+                </View>
+              </ScrollView>
             );
           }
 
@@ -65,13 +86,15 @@ export default function ChatBubble({
 const styles = StyleSheet.create({
   wrap: {
     width: "100%",
+    marginBottom: 10, // space between bubbles
   },
 
   bubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 18,
     borderWidth: 1,
+    flexShrink: 1, // ✅ prevents clipping
   },
 
   userBubble: {
@@ -87,16 +110,19 @@ const styles = StyleSheet.create({
   },
 
   text: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 24,
     flexWrap: "wrap",
   },
 
+  codeScroll: {
+    marginTop: 8,
+  },
+
   codeBlock: {
-    marginTop: 6,
-    padding: 10,
+    padding: 12,
     backgroundColor: "#F4F6FA",
-    borderRadius: 8,
+    borderRadius: 10,
   },
 
   codeText: {
