@@ -9,13 +9,24 @@ import {
   type DownloadProgress,
 } from "./LocalModel";
 
+/* ============================== TYPES ============================== */
+
 export type Message = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
 };
 
-/* ------------------ INTERNAL STATE ------------------ */
+export interface GeneratedQuestion {
+  id: number;
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  topic: string;
+  explanation: string;
+}
+
+/* ============================== STATE ============================== */
 
 type AIState = "idle" | "downloading" | "loading" | "ready" | "error";
 
@@ -47,80 +58,52 @@ function setState(next: AIState, err?: string | null) {
   notify();
 }
 
-/* ------------------ REFINED TEACHER PROMPT (OPTIONAL) ------------------ */
-/**
- * You had getSystemPrompt before, but you weren't using it in chat completion.
- * Keeping it here in case you later want to inject a system prompt.
- */
-function getSystemPrompt(grade: number, languageName: string, concept: string): string {
-  return `
-You are Offklass AI: a warm, patient math teacher who loves when students ask questions. You explain to a grade ${grade} student in ${languageName}. Use VERY SIMPLE words like you're talking to a 5-year-old.
+/* ============================== CLEANING ============================== */
 
-Before you explain, briefly encourage them (e.g. "Great question!" or "I'm so glad you asked—that's how we learn!"). Then explain the concept. Be kind and supportive so they feel safe to keep asking.
-
-The concept to explain: "${concept}"
-
-EXPLANATION RULES - Write on the board step-by-step (VERY SIMPLE):
-1. Stack the numbers (standard way)
-2. Show the solving process step by step
-3. Write what you're doing: "0 plus 0 is 0" then show the result
-4. Keep it SHORT - minimal text, just the math steps
-5. NO deep explanations - just show how to solve
-6. Use VERY simple language - no math jargon, use words like "add" not "addition", "take away" not "subtract"
-7. Write like you're solving on a board: "First...", "Next...", "Then..."
-8. Use words a 5-year-old would understand
-
-EXAMPLES OF SIMPLE EXPLANATIONS:
-
-For "Addition":
-"Let me show you:
-  3
-+ 2
----
-  ___
-  
-First, ones: 3 plus 2 is 5
-Write 5:
-  3
-+ 2
----
-  5"
-
-For "Multiplication":
-"Let me solve this:
-  3
-× 4
----
-  ___
-  
-4 times 3 is 12
-Write 12:
-  3
-× 4
----
- 12"
-
-Provide a clear, SIMPLE step-by-step explanation that a grade ${grade} student can easily follow.
-`.trim();
+function stripPromptTokens(input: string) {
+  return (input ?? "").replace(
+    /<\s*\/?\s*(start_of_turn|end_of_turn|bos|eos)\s*>/gi,
+    ""
+  );
 }
 
-/* ------------------ HELPERS ------------------ */
+// ✅ removes leaked tokens + markdown (so UI doesn't show raw ** or * lists)
+export function cleanGemmaOutput(text: string): string {
+  if (!text) return "";
+
+  return text
+    // markdown cleanup
+    .replace(/\*\*(.*?)\*\*/g, "$1") // **bold**
+    .replace(/^\*\s+/gm, "• ") // * bullet
+    .replace(/`{1,3}/g, "") // backticks
+    // gemma tokens cleanup
+    .replace(/<\s*\/?\s*(start_of_turn|end_of_turn|bos|eos)\s*>/gi, "")
+    // whitespace normalize
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/* ============================== PROMPT FORMAT ============================== */
 
 function formatMessagesForGemma(messages: Message[], systemPrompt: string = ""): string {
   let out = "<bos>";
+
   if (systemPrompt) {
-    out += `<start_of_turn>user\n${systemPrompt}<end_of_turn>\n`;
+    out += `<start_of_turn>user\n${stripPromptTokens(systemPrompt)}<end_of_turn>\n`;
   }
+
   for (const msg of messages) {
     if (msg.role === "system") continue;
     const role = msg.role === "user" ? "user" : "model";
-    out += `<start_of_turn>${role}\n${msg.content}<end_of_turn>\n`;
+    out += `<start_of_turn>${role}\n${stripPromptTokens(msg.content)}<end_of_turn>\n`;
   }
+
   out += "<start_of_turn>model\n";
   return out;
 }
 
-/* ------------------ CONTEXT / MODEL LIFECYCLE ------------------ */
+/* ============================== MODEL / CONTEXT ============================== */
 
 async function getContext(choice: ModelChoice = "gemma2b"): Promise<LlamaContext> {
   if (Constants.appOwnership === "expo") {
@@ -129,7 +112,6 @@ async function getContext(choice: ModelChoice = "gemma2b"): Promise<LlamaContext
 
   if (ctx && loadedModel === choice) return ctx;
 
-  // Download if needed
   const already = await isModelDownloaded();
   if (!already) setState("downloading");
 
@@ -139,22 +121,19 @@ async function getContext(choice: ModelChoice = "gemma2b"): Promise<LlamaContext
     notify();
   });
 
-  // Release old ctx if any
   if (ctx) {
     try {
       await ctx.release();
     } catch {}
   }
 
-  // Small delay helps Android filesystem settle after moveAsync
   await new Promise((r) => setTimeout(r, 350));
 
   setState("loading");
 
-  // ✅ IMPORTANT: use_mlock true can cause memory crashes / app restarts on Android
   ctx = await initLlama({
     model: modelPath,
-    n_ctx: 1024, // safer for phones; raise later if stable
+    n_ctx: 1024,
     n_threads: 4,
     use_mlock: false,
   });
@@ -165,10 +144,6 @@ async function getContext(choice: ModelChoice = "gemma2b"): Promise<LlamaContext
   return ctx;
 }
 
-/**
- * Screen should call this once on mount.
- * It will download + init, and keep aiState updated.
- */
 export async function prepareAI(): Promise<void> {
   try {
     await getContext("gemma2b");
@@ -178,34 +153,29 @@ export async function prepareAI(): Promise<void> {
   }
 }
 
-/* ------------------ QUIZ GENERATION ------------------ */
+/* ============================== QUIZ GENERATION ============================== */
 
-export interface GeneratedQuestion {
-  id: number;
-  question: string;
-  options: string[];
-  correctAnswer: string;
-  topic: string;
-  explanation: string;
-}
-
+// ✅ Efficient, stable prompt: forces strict format + concrete numeric options + transcript grounding.
 const QUIZ_GENERATION_PROMPT = `
-You are Offklass AI. Create 5 multiple choice questions for Grade 4.
-Use the transcript to create REAL math options.
+You are Offklass AI. Create exactly 5 multiple choice math questions for Grade 4 using ONLY the transcript facts.
 
-### GOOD EXAMPLE ###
-Question: In the number 47, what does the 4 represent?
-A: 4 ones
-B: 4 tens
-C: 7 tens
-D: 400
-Answer: 4 tens
-Explanation: The 4 is in the tens place, so it represents 4 tens.
+OUTPUT FORMAT (STRICT, NO MARKDOWN):
+Q1: <question>
+A) <option>
+B) <option>
+C) <option>
+D) <option>
+ANS: <exact option text>
+WHY: <one short sentence explanation>
 
-### RULES ###
-1. Options must be specific values, NOT "1,2,3,4".
-2. The Answer must be the text of the correct option.
-3. Keep it very simple.
+RULES:
+- Each question must be grade-4 appropriate.
+- Options must be REAL values (no "1,2,3,4" filler).
+- Exactly 4 options per question.
+- "ANS:" must match ONE option exactly (copy-paste).
+- Keep "WHY:" under 15 words.
+- Do NOT add extra commentary.
+- Avoid tricky wording; test understanding.
 
 Transcript:
 `;
@@ -217,86 +187,87 @@ export async function generateQuizFromTranscript(
 ): Promise<GeneratedQuestion[]> {
   try {
     const engine = await getContext("gemma2b");
-    const prompt = QUIZ_GENERATION_PROMPT + transcript + "\n\nGenerate 5 questions:";
+
+    // Keep prompt smaller + focused to reduce hallucinations
+    const trimmedTranscript = (transcript ?? "").slice(0, 6000);
+
+    const prompt =
+      QUIZ_GENERATION_PROMPT +
+      trimmedTranscript +
+      `\n\nLesson: ${lessonTitle}\nTopic: ${topic}\n\nCreate the 5 questions now.`;
 
     const { text } = await engine.completion({
-      prompt: formatMessagesForGemma([{ id: "1", role: "user", content: prompt }]),
-      n_predict: 1000,
-      temperature: 0.0,
-      top_p: 0.1,
+      prompt: formatMessagesForGemma([{ id: "qz1", role: "user", content: prompt }]),
+      n_predict: 1100,
+      temperature: 0.1,
+      top_p: 0.9,
+      stop: ["<end_of_turn>", "<eos>"],
     });
 
-    return parseQuizResponse(text.trim(), lessonTitle, topic);
+    return parseQuizResponse(cleanGemmaOutput(text), lessonTitle, topic);
   } catch (err) {
     console.error("Quiz generation error:", err);
     return [];
   }
 }
 
-function parseQuizResponse(response: string, _lessonTitle: string, topic: string): GeneratedQuestion[] {
-  const questions: GeneratedQuestion[] = [];
+// ✅ Robust parser for the strict Q/A/B/C/D/ANS/WHY format
+function parseQuizResponse(
+  response: string,
+  _lessonTitle: string,
+  topic: string
+): GeneratedQuestion[] {
+  const out: GeneratedQuestion[] = [];
+  const txt = (response ?? "").replace(/\r\n/g, "\n").trim();
+  if (!txt) return out;
 
-  const cleanResponse = response.replace(/\*\*/g, "").replace(/Question\s*\d+:/gi, "Question:");
-  const rawBlocks = cleanResponse.split(/Question:/i).filter((b) => b.trim().length > 10);
+  // Split by Q1/Q2...
+  const blocks = txt
+    .split(/\n(?=Q[1-5]:\s*)/g)
+    .map((b) => b.trim())
+    .filter(Boolean);
 
-  rawBlocks.forEach((block, index) => {
-    try {
-      const lines = block
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0);
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
 
-      const questionText = lines[0];
+    const q = b.match(/^Q\d+:\s*(.+)$/m)?.[1]?.trim();
+    const A = b.match(/^A\)\s*(.+)$/m)?.[1]?.trim();
+    const B = b.match(/^B\)\s*(.+)$/m)?.[1]?.trim();
+    const C = b.match(/^C\)\s*(.+)$/m)?.[1]?.trim();
+    const D = b.match(/^D\)\s*(.+)$/m)?.[1]?.trim();
+    const ans = b.match(/^ANS:\s*(.+)$/m)?.[1]?.trim();
+    const why = b.match(/^WHY:\s*(.+)$/m)?.[1]?.trim();
 
-      const optA = lines.find((l) => /^A[:\s.-]/i.test(l))?.replace(/^A[:\s.-]/i, "").trim();
-      const optB = lines.find((l) => /^B[:\s.-]/i.test(l))?.replace(/^B[:\s.-]/i, "").trim();
-      const optC = lines.find((l) => /^C[:\s.-]/i.test(l))?.replace(/^C[:\s.-]/i, "").trim();
-      const optD = lines.find((l) => /^D[:\s.-]/i.test(l))?.replace(/^D[:\s.-]/i, "").trim();
+    if (!q || !A || !B || !C || !D || !ans) continue;
 
-      const answerLine = lines
-        .find((l) => /^(Answer|Correct|Correct Answer)[:\s.-]/i.test(l))
-        ?.replace(/^(Answer|Correct|Correct Answer)[:\s.-]/i, "")
-        .trim();
+    const options = [A, B, C, D];
 
-      const explanation = lines
-        .find((l) => /^Explanation[:\s.-]/i.test(l))
-        ?.replace(/^Explanation[:\s.-]/i, "")
-        .trim();
-
-      if (questionText && optA && optB && optC && optD && answerLine) {
-        const options = [optA, optB, optC, optD];
-
-        let correctIndex = options.findIndex(
-          (opt) =>
-            answerLine.toLowerCase().includes(opt.toLowerCase()) ||
-            opt.toLowerCase().includes(answerLine.toLowerCase())
-        );
-
-        if (correctIndex === -1) {
-          const firstChar = answerLine.charAt(0).toUpperCase();
-          if (["A", "B", "C", "D"].includes(firstChar)) correctIndex = firstChar.charCodeAt(0) - 65;
-        }
-
-        if (correctIndex >= 0 && correctIndex <= 3) {
-          questions.push({
-            id: Date.now() + index,
-            question: questionText,
-            options,
-            correctAnswer: options[correctIndex],
-            topic,
-            explanation: explanation || "Keep up the great work!",
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Parse Error:", err);
+    // Ensure answer matches one option exactly; otherwise attempt soft match
+    let correct = options.find((o) => o === ans);
+    if (!correct) {
+      const lower = ans.toLowerCase();
+      correct =
+        options.find((o) => o.toLowerCase() === lower) ||
+        options.find((o) => lower.includes(o.toLowerCase())) ||
+        options.find((o) => o.toLowerCase().includes(lower));
     }
-  });
+    if (!correct) continue;
 
-  return questions;
+    out.push({
+      id: Date.now() + i,
+      question: q,
+      options,
+      correctAnswer: correct,
+      topic,
+      explanation: why && why.length ? why : "Good job! Keep practicing!",
+    });
+  }
+
+  // Always return max 5
+  return out.slice(0, 5);
 }
 
-/* ------------------ AI CHAT ------------------ */
+/* ============================== CHAT ============================== */
 
 function isGreeting(text: string): boolean {
   const t = text.trim().toLowerCase();
@@ -304,7 +275,7 @@ function isGreeting(text: string): boolean {
 }
 
 export async function callAI(history: Message[]): Promise<Message> {
-  // ✅ HARD GATE: never attempt generation while downloading/loading/error
+  // gates
   if (aiState === "downloading") {
     const pct = aiProgress ? `${aiProgress.percent.toFixed(1)}%` : "";
     return { id: "dl", role: "assistant", content: `Downloading my AI brain… 🧠 ${pct}`.trim() };
@@ -315,26 +286,22 @@ export async function callAI(history: Message[]): Promise<Message> {
   if (aiState === "error") {
     return { id: "err", role: "assistant", content: "AI isn’t ready. Tap Retry to fix me." };
   }
-
-  if (inflight) return { id: "busy", role: "assistant", content: "I'm still calculating..." };
+  if (inflight) return { id: "busy", role: "assistant", content: "I'm still thinking..." };
 
   const lastUser = [...history].reverse().find((m) => m.role === "user");
 
-  // Greeting shortcut
   if (lastUser && isGreeting(lastUser.content)) {
     return {
       id: "greet",
       role: "assistant",
-      content: "Hi! I'm Offklass AI. Which math topic are we working on today?",
+      content: "Hi! I'm Offklass AI. Tell me your grade and the math topic 😊",
     };
   }
 
-  // ✅ MATH FALLBACK
+  // math fallback (fast + stable)
   if (lastUser) {
     const fallback = tryMathFallback(lastUser.content);
-    if (fallback) {
-      return { id: Date.now().toString(), role: "assistant", content: fallback };
-    }
+    if (fallback) return { id: Date.now().toString(), role: "assistant", content: fallback };
   }
 
   inflight = (async () => {
@@ -343,13 +310,19 @@ export async function callAI(history: Message[]): Promise<Message> {
 
       const { text } = await engine.completion({
         prompt: formatMessagesForGemma(history.slice(-4)),
-        n_predict: 500,
-        temperature: 0,
-        top_p: 0.1,
+        n_predict: 520,
+        temperature: 0.2,
+        top_p: 0.9,
         stop: ["<end_of_turn>", "<eos>"],
       });
 
-      return { id: Date.now().toString(), role: "assistant", content: text.trim() };
+      const cleaned = cleanGemmaOutput(text);
+
+      return {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: cleaned.length ? cleaned : "I got an empty answer. Try again!",
+      };
     } catch (e: any) {
       setState("error", String(e?.message ?? e ?? "AI Error"));
       return { id: "error", role: "assistant", content: "AI Error" };
@@ -360,6 +333,8 @@ export async function callAI(history: Message[]): Promise<Message> {
 
   return inflight;
 }
+
+/* ============================== UTILS ============================== */
 
 export async function warmupAI(): Promise<void> {
   try {
