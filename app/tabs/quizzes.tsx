@@ -1,5 +1,5 @@
 // app/(tabs)/quizzes.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   Pressable,
   Modal,
   ActivityIndicator,
-  Animated,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,11 +18,10 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
 import { NextStepFooter } from "../../components/NextStepFooter";
-
 import { generateQuizFromTranscript } from "../../lib/ai.local";
-import { getLessonInfoByUnit, type LessonTranscript } from "../../lib/lessonTranscripts";
+import { LESSON_INFO, getLessonInfoByUnit } from "../../lib/lessonTranscripts";
 
-/* ----------------------------- Quiz Data ---------------------------- */
+/* ----------------------------- Types ---------------------------- */
 
 type QuizQuestion = {
   id: number;
@@ -33,148 +31,15 @@ type QuizQuestion = {
   topic: string;
   explanation: string;
   difficulty?: "Easy" | "Medium" | "Hard";
-  type?: "Premade Quiz" | "Practice" | "AI Quiz";
+  type?: "AI Quiz" | "Practice";
 };
 
-const BASE_QUESTIONS: QuizQuestion[] = [
-  {
-    id: 1,
-    question:
-      "If you have 2 hundreds blocks, 4 tens blocks, and 7 ones blocks, what number do they represent?",
-    options: ["247", "274", "427", "742"],
-    correctAnswer: "247",
-    topic: "Place Value Blocks",
-    explanation:
-      "Count each type of block: 2 hundreds = 200, 4 tens = 40, 7 ones = 7. Add them together: 200 + 40 + 7 = 247.",
-    difficulty: "Medium",
-    type: "Premade Quiz",
-  },
-  {
-    id: 2,
-    question: "In the number 5,372, what is the value of the digit 3?",
-    options: ["3", "30", "300", "3,000"],
-    correctAnswer: "300",
-    topic: "Place Value Tables",
-    explanation: "The digit 3 is in the hundreds place. So its value is 3 × 100 = 300.",
-    difficulty: "Medium",
-    type: "Premade Quiz",
-  },
-  {
-    id: 3,
-    question: "What is the place value of 7 in the number 47,856?",
-    options: ["Ones", "Tens", "Hundreds", "Thousands"],
-    correctAnswer: "Thousands",
-    topic: "Finding Place Value",
-    explanation:
-      "Looking at 47,856 from right to left: 6 is ones, 5 is tens, 8 is hundreds, 7 is thousands.",
-    difficulty: "Medium",
-    type: "Premade Quiz",
-  },
-  {
-    id: 4,
-    question: "Using the digits 3, 8, 1, 5, what is the largest number you can make?",
-    options: ["1358", "3158", "5831", "8531"],
-    correctAnswer: "8531",
-    topic: "Creating the Largest Number",
-    explanation:
-      "To make the largest number, put the biggest digits in the highest place values: 8 in thousands, 5 in hundreds, 3 in tens, 1 in ones = 8,531.",
-    difficulty: "Medium",
-    type: "Premade Quiz",
-  },
-  {
-    id: 5,
-    question:
-      "In a place value chart, what number is shown by: Ten-thousands: 4, Thousands: 0, Hundreds: 6, Tens: 2, Ones: 9?",
-    options: ["40,629", "46,290", "4,629", "406,290"],
-    correctAnswer: "40,629",
-    topic: "Place Value Tables",
-    explanation:
-      "Read from left to right: 4 in ten-thousands = 40,000, 0 in thousands = 0, 6 in hundreds = 600, 2 in tens = 20, 9 in ones = 9. Total: 40,629.",
-    difficulty: "Medium",
-    type: "Premade Quiz",
-  },
-  {
-    id: 6,
-    question: "How many tens blocks would you need to represent the number 340?",
-    options: ["3", "4", "34", "40"],
-    correctAnswer: "4",
-    topic: "Place Value Blocks",
-    explanation:
-      "340 = 3 hundreds + 4 tens + 0 ones. So you need 4 tens blocks (the digit in the tens place).",
-    difficulty: "Easy",
-    type: "Premade Quiz",
-  },
-  {
-    id: 7,
-    question: "What is the expanded form of 6,258?",
-    options: ["6 + 2 + 5 + 8", "6,000 + 200 + 50 + 8", "6 × 1000 + 2 × 100", "62 + 58"],
-    correctAnswer: "6,000 + 200 + 50 + 8",
-    topic: "Finding Place Value",
-    explanation:
-      "Break down each digit by its place value: 6 is in thousands (6,000), 2 is in hundreds (200), 5 is in tens (50), 8 is in ones (8).",
-    difficulty: "Medium",
-    type: "Premade Quiz",
-  },
-  {
-    id: 8,
-    question:
-      "If you arrange the digits 2, 9, 4, 7 to make the smallest possible number, what do you get?",
-    options: ["2479", "2749", "4279", "7942"],
-    correctAnswer: "2479",
-    topic: "Creating the Largest Number",
-    explanation:
-      "To make the smallest number, put the smallest digits in the highest place values: 2 in thousands, 4 in hundreds, 7 in tens, 9 in ones = 2,479.",
-    difficulty: "Medium",
-    type: "Premade Quiz",
-  },
-  {
-    id: 9,
-    question: "In the number 80,456, what role does the zero play?",
-    options: ["It has no value", "It's a placeholder", "It means 80", "It's an error"],
-    correctAnswer: "It's a placeholder",
-    topic: "Place Value Tables",
-    explanation:
-      "The zero is a placeholder in the thousands position, showing that there are no thousands. Without it, the number would be 8,456 instead of 80,456.",
-    difficulty: "Medium",
-    type: "Premade Quiz",
-  },
-  {
-    id: 10,
-    question:
-      "If you have 1 thousand block, 0 hundred blocks, 3 ten blocks, and 5 one blocks, what number is represented?",
-    options: ["135", "1,035", "1,305", "10,35"],
-    correctAnswer: "1,035",
-    topic: "Place Value Blocks",
-    explanation:
-      "Count the blocks: 1 thousand = 1,000, 0 hundreds = 0, 3 tens = 30, 5 ones = 5. Total: 1,000 + 0 + 30 + 5 = 1,035.",
-    difficulty: "Easy",
-    type: "Premade Quiz",
-  },
-  {
-    id: 11,
-    question: "Which of these numbers has a 5 in the tens place?",
-    options: ["5,432", "2,453", "3,254", "4,325"],
-    correctAnswer: "3,254",
-    topic: "Finding Place Value",
-    explanation:
-      "In 3,254: 3 is thousands, 2 is hundreds, 5 is tens, 4 is ones. Only 3,254 has 5 in the tens place.",
-    difficulty: "Medium",
-    type: "Premade Quiz",
-  },
-  {
-    id: 12,
-    question: "Using digits 9, 2, 6, 0, what's the largest 4-digit number you can create?",
-    options: ["9620", "9602", "9260", "9026"],
-    correctAnswer: "9620",
-    topic: "Creating the Largest Number",
-    explanation:
-      "Arrange from largest to smallest: 9 (thousands), 6 (hundreds), 2 (tens), 0 (ones) = 9,620.",
-    difficulty: "Easy",
-    type: "Premade Quiz",
-  },
-];
+type AnswerState = {
+  selected: string | null;
+  isAnswered: boolean;
+};
 
-/* ------------------------------- Lightweight i18n ------------------------------- */
+/* ----------------------------- i18n ---------------------------- */
 
 const LANGS = ["English", "नेपाली", "اردو", "বাংলা", "हिन्दी"] as const;
 type Lang = (typeof LANGS)[number];
@@ -184,9 +49,8 @@ const L10N: Record<
   {
     qOf: (a: number, b: number) => string;
     score: string;
-    premade: string;
-    practice: string;
     aiQuiz: string;
+    practice: string;
     explain: string;
     askAI: string;
     back: string;
@@ -210,8 +74,7 @@ const L10N: Record<
     rewardsTitle: string;
     wrongTitle: string;
 
-    genBtn: string;
-    selectLesson: string;
+    selectUnit: string;
     cancel: string;
     thinkingTitle: string;
     thinkingSub: string;
@@ -219,17 +82,27 @@ const L10N: Record<
     explainTitle: string;
     gotIt: string;
 
-    // nudge
-    needHelpTitle: string;
-    needHelpSub: string;
+    lobbyTitle: string;
+    lobbySub: string;
+    chooseUnit: string;
+    startChallenge: string;
+    gameReady: string;
+    unitLabel: string;
+    challengeMode: string;
+    emptyTitle: string;
+    emptySub: string;
+    selected: string;
+
+    aiFailTitle: string;
+    aiFailSub: string;
+    tryAgain: string;
   }
 > = {
   English: {
     qOf: (a, b) => `Question ${a} / ${b}`,
     score: "Score",
-    premade: "Premade Quiz",
-    practice: "Practice",
     aiQuiz: "AI Quiz",
+    practice: "Practice",
     explain: "Explain the Answer",
     askAI: "Ask Offklass AI",
     back: "Back",
@@ -239,7 +112,7 @@ const L10N: Record<
     correct: "Correct",
     incorrect: "Incorrect",
 
-    doneTitle: "Level Complete!",
+    doneTitle: "Challenge Complete!",
     doneScore: (s, t) => `You scored ${s} / ${t}`,
     playAgain: "Play Again",
     practiceBtn: "Practice Wrong Questions",
@@ -253,24 +126,35 @@ const L10N: Record<
     rewardsTitle: "Rewards",
     wrongTitle: "Practice Targets",
 
-    genBtn: "Generate AI Quiz",
-    selectLesson: "Select a Lesson",
+    selectUnit: "Select a Unit",
     cancel: "Cancel",
-    thinkingTitle: "Offklass is thinking...",
-    thinkingSub: "Creating your custom quiz.",
+    thinkingTitle: "Offklass is building your challenge...",
+    thinkingSub: "Creating quiz questions from your selected unit.",
 
     explainTitle: "Explanation",
     gotIt: "Got it!",
 
-    needHelpTitle: "You got this wrong 😅",
-    needHelpSub: "Want help? Ask Offklass AI and I’ll explain step-by-step.",
+    lobbyTitle: "Quiz Adventure",
+    lobbySub: "Choose a unit first, then press Start Challenge.",
+    chooseUnit: "Choose Unit",
+    startChallenge: "Start Challenge",
+    gameReady: "Game Ready",
+    unitLabel: "Unit",
+    challengeMode: "Challenge Mode",
+    emptyTitle: "No quiz yet",
+    emptySub: "Select a unit to begin.",
+    selected: "Selected",
+
+    aiFailTitle: "AI quiz could not be generated",
+    aiFailSub: "Please try again. Make sure the local AI model is ready.",
+    tryAgain: "Try Again",
   },
+
   नेपाली: {
     qOf: (a, b) => `प्रश्न ${a} / ${b}`,
     score: "अंक",
-    premade: "तयार क्विज",
-    practice: "अभ्यास",
     aiQuiz: "AI क्विज",
+    practice: "अभ्यास",
     explain: "उत्तर बुझाउनुहोस्",
     askAI: "Offklass AI लाई सोध्नुहोस्",
     back: "पछाडि",
@@ -280,11 +164,11 @@ const L10N: Record<
     correct: "सही",
     incorrect: "गलत",
 
-    doneTitle: "लेभल पूरा!",
+    doneTitle: "च्यालेन्ज पूरा!",
     doneScore: (s, t) => `तपाईंको स्कोर ${s} / ${t}`,
     playAgain: "फेरि खेल्नुहोस्",
     practiceBtn: "गलत प्रश्न अभ्यास गर्नुहोस्",
-    noWrong: "एकदमै राम्रो! कुनै गलत छैन 🎉",
+    noWrong: "धेरै राम्रो! कुनै गलत छैन 🎉",
 
     rank: "र्‍याङ्क",
     rankA: "लेजेंड",
@@ -294,24 +178,35 @@ const L10N: Record<
     rewardsTitle: "इनाम",
     wrongTitle: "अभ्यास लक्ष्य",
 
-    genBtn: "AI क्विज बनाउनुहोस्",
-    selectLesson: "पाठ छान्नुहोस्",
+    selectUnit: "युनिट छान्नुहोस्",
     cancel: "रद्द गर्नुहोस्",
-    thinkingTitle: "Offklass सोच्दैछ...",
-    thinkingSub: "तपाईंको कस्टम क्विज बनाउँदै।",
+    thinkingTitle: "Offklass च्यालेन्ज बनाउँदैछ...",
+    thinkingSub: "छानिएको युनिटबाट क्विज तयार हुँदैछ।",
 
     explainTitle: "व्याख्या",
     gotIt: "बुझें!",
 
-    needHelpTitle: "यो गलत भयो 😅",
-    needHelpSub: "मद्दत चाहियो? Offklass AI लाई सोध्नुहोस्।",
+    lobbyTitle: "क्विज एडभेन्चर",
+    lobbySub: "पहिले युनिट छान्नुहोस्, अनि Start Challenge थिच्नुहोस्।",
+    chooseUnit: "युनिट छान्नुहोस्",
+    startChallenge: "च्यालेन्ज सुरु गर्नुहोस्",
+    gameReady: "खेल तयार",
+    unitLabel: "युनिट",
+    challengeMode: "च्यालेन्ज मोड",
+    emptyTitle: "अहिले क्विज छैन",
+    emptySub: "सुरु गर्न युनिट छान्नुहोस्।",
+    selected: "छानिएको",
+
+    aiFailTitle: "AI क्विज बनाउन सकिएन",
+    aiFailSub: "कृपया फेरि प्रयास गर्नुहोस्। Local AI model तयार भएको सुनिश्चित गर्नुहोस्।",
+    tryAgain: "फेरि प्रयास गर्नुहोस्",
   },
+
   اردو: {
     qOf: (a, b) => `سوال ${a} / ${b}`,
     score: "اسکور",
-    premade: "تیار کوئز",
-    practice: "پریکٹس",
     aiQuiz: "AI کوئز",
+    practice: "پریکٹس",
     explain: "جواب سمجھائیں",
     askAI: "Offklass AI سے پوچھیں",
     back: "واپس",
@@ -321,7 +216,7 @@ const L10N: Record<
     correct: "درست",
     incorrect: "غلط",
 
-    doneTitle: "لیول مکمل!",
+    doneTitle: "چیلنج مکمل!",
     doneScore: (s, t) => `آپ کا اسکور ${s} / ${t}`,
     playAgain: "دوبارہ کھیلیں",
     practiceBtn: "غلط سوالات کی مشق",
@@ -335,24 +230,35 @@ const L10N: Record<
     rewardsTitle: "انعامات",
     wrongTitle: "پریکٹس ہدف",
 
-    genBtn: "AI کوئز بنائیں",
-    selectLesson: "سبق منتخب کریں",
+    selectUnit: "یونٹ منتخب کریں",
     cancel: "منسوخ",
-    thinkingTitle: "Offklass سوچ رہا ہے...",
-    thinkingSub: "آپ کا کسٹم کوئز تیار ہو رہا ہے۔",
+    thinkingTitle: "Offklass آپ کا چیلنج بنا رہا ہے...",
+    thinkingSub: "منتخب یونٹ سے کوئز تیار ہو رہا ہے۔",
 
     explainTitle: "وضاحت",
     gotIt: "سمجھ گیا!",
 
-    needHelpTitle: "یہ غلط ہو گیا 😅",
-    needHelpSub: "مدد چاہیے؟ Offklass AI سے پوچھیں۔",
+    lobbyTitle: "کوئز ایڈونچر",
+    lobbySub: "پہلے یونٹ منتخب کریں، پھر Start Challenge دبائیں۔",
+    chooseUnit: "یونٹ منتخب کریں",
+    startChallenge: "چیلنج شروع کریں",
+    gameReady: "گیم تیار",
+    unitLabel: "یونٹ",
+    challengeMode: "چیلنج موڈ",
+    emptyTitle: "ابھی کوئز نہیں",
+    emptySub: "شروع کرنے کے لیے یونٹ منتخب کریں۔",
+    selected: "منتخب",
+
+    aiFailTitle: "AI کوئز تیار نہیں ہو سکا",
+    aiFailSub: "براہ کرم دوبارہ کوشش کریں۔ Local AI model ready ہونا چاہیے۔",
+    tryAgain: "دوبارہ کوشش کریں",
   },
+
   বাংলা: {
     qOf: (a, b) => `প্রশ্ন ${a} / ${b}`,
     score: "স্কোর",
-    premade: "প্রিমেড কুইজ",
-    practice: "প্র্যাকটিস",
     aiQuiz: "AI কুইজ",
+    practice: "প্র্যাকটিস",
     explain: "উত্তর ব্যাখ্যা করুন",
     askAI: "Offklass AI কে জিজ্ঞেস করুন",
     back: "ফিরে যান",
@@ -362,7 +268,7 @@ const L10N: Record<
     correct: "সঠিক",
     incorrect: "ভুল",
 
-    doneTitle: "লেভেল শেষ!",
+    doneTitle: "চ্যালেঞ্জ শেষ!",
     doneScore: (s, t) => `আপনার স্কোর ${s} / ${t}`,
     playAgain: "আবার খেলুন",
     practiceBtn: "ভুল প্রশ্ন প্র্যাকটিস",
@@ -376,24 +282,35 @@ const L10N: Record<
     rewardsTitle: "রিওয়ার্ড",
     wrongTitle: "প্র্যাকটিস টার্গেট",
 
-    genBtn: "AI কুইজ তৈরি করুন",
-    selectLesson: "লেসন নির্বাচন করুন",
+    selectUnit: "ইউনিট নির্বাচন করুন",
     cancel: "বাতিল",
-    thinkingTitle: "Offklass ভাবছে...",
-    thinkingSub: "আপনার কাস্টম কুইজ বানাচ্ছে।",
+    thinkingTitle: "Offklass তোমার চ্যালেঞ্জ বানাচ্ছে...",
+    thinkingSub: "নির্বাচিত ইউনিট থেকে কুইজ তৈরি হচ্ছে।",
 
     explainTitle: "ব্যাখ্যা",
     gotIt: "বুঝেছি!",
 
-    needHelpTitle: "এটা ভুল হয়েছে 😅",
-    needHelpSub: "সহায়তা চান? Offklass AI কে জিজ্ঞেস করুন।",
+    lobbyTitle: "কুইজ অ্যাডভেঞ্চার",
+    lobbySub: "আগে একটি ইউনিট বেছে নাও, তারপর Start Challenge চাপো।",
+    chooseUnit: "ইউনিট বেছে নাও",
+    startChallenge: "চ্যালেঞ্জ শুরু করো",
+    gameReady: "গেম রেডি",
+    unitLabel: "ইউনিট",
+    challengeMode: "চ্যালেঞ্জ মোড",
+    emptyTitle: "এখনো কুইজ নেই",
+    emptySub: "শুরু করতে একটি ইউনিট বেছে নাও।",
+    selected: "নির্বাচিত",
+
+    aiFailTitle: "AI কুইজ তৈরি করা যায়নি",
+    aiFailSub: "আবার চেষ্টা করো। Local AI model ready আছে কিনা দেখে নাও।",
+    tryAgain: "আবার চেষ্টা করো",
   },
+
   हिन्दी: {
     qOf: (a, b) => `प्रश्न ${a} / ${b}`,
     score: "स्कोर",
-    premade: "Premade Quiz",
-    practice: "Practice",
     aiQuiz: "AI Quiz",
+    practice: "Practice",
     explain: "Answer समझाओ",
     askAI: "Ask Offklass AI",
     back: "Back",
@@ -403,7 +320,7 @@ const L10N: Record<
     correct: "Correct",
     incorrect: "Incorrect",
 
-    doneTitle: "Level Complete!",
+    doneTitle: "Challenge Complete!",
     doneScore: (s, t) => `You scored ${s} / ${t}`,
     playAgain: "Play Again",
     practiceBtn: "Practice Wrong Questions",
@@ -417,21 +334,32 @@ const L10N: Record<
     rewardsTitle: "Rewards",
     wrongTitle: "Practice Targets",
 
-    genBtn: "Generate AI Quiz",
-    selectLesson: "Select a Lesson",
+    selectUnit: "Select a Unit",
     cancel: "Cancel",
-    thinkingTitle: "Offklass is thinking...",
-    thinkingSub: "Creating your custom quiz.",
+    thinkingTitle: "Offklass is building your challenge...",
+    thinkingSub: "Creating quiz questions from your selected unit.",
 
     explainTitle: "Explanation",
     gotIt: "Got it!",
 
-    needHelpTitle: "This is wrong 😅",
-    needHelpSub: "Need help? Ask Offklass AI for step-by-step.",
+    lobbyTitle: "Quiz Adventure",
+    lobbySub: "Choose a unit first, then press Start Challenge.",
+    chooseUnit: "Choose Unit",
+    startChallenge: "Start Challenge",
+    gameReady: "Game Ready",
+    unitLabel: "Unit",
+    challengeMode: "Challenge Mode",
+    emptyTitle: "No quiz yet",
+    emptySub: "Select a unit to begin.",
+    selected: "Selected",
+
+    aiFailTitle: "AI quiz could not be generated",
+    aiFailSub: "Please try again. Make sure the local AI model is ready.",
+    tryAgain: "Try Again",
   },
 };
 
-/* ------------------------------- Kids-friendly UI ------------------------------ */
+/* ----------------------------- helpers ---------------------------- */
 
 const BG_TOP = "#BDE6FF";
 const BG_MID = "#FFF2B8";
@@ -439,8 +367,7 @@ const BG_BOT = "#E7D7FF";
 
 const CARD = "rgba(255,255,255,0.94)";
 const INK = "#111827";
-
-type AnswerState = { selected: string | null; isAnswered: boolean };
+const REQUIRED_QUESTION_COUNT = 10;
 
 function clampPct(n: number) {
   return Math.max(0, Math.min(100, n));
@@ -453,6 +380,168 @@ function starsForPct(p: number) {
   if (p >= 35) return 2;
   return 1;
 }
+
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function normalizeText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeOption(value: unknown) {
+  return normalizeText(value)
+    .replace(/^[A-D][\)\.:\-\s]+/i, "")
+    .trim();
+}
+
+function dedupeStrings(items: string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of items) {
+    const key = item.toLowerCase();
+    if (!item || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+
+  return out;
+}
+
+function resolveCorrectAnswer(options: string[], rawCorrectAnswer: string): string | null {
+  if (!rawCorrectAnswer || options.length === 0) return null;
+
+  const exact = options.find(
+    (opt) => opt.toLowerCase() === rawCorrectAnswer.toLowerCase()
+  );
+  if (exact) return exact;
+
+  const contains = options.find(
+    (opt) =>
+      rawCorrectAnswer.toLowerCase().includes(opt.toLowerCase()) ||
+      opt.toLowerCase().includes(rawCorrectAnswer.toLowerCase())
+  );
+  if (contains) return contains;
+
+  const first = rawCorrectAnswer.charAt(0).toUpperCase();
+  if (first === "A") return options[0] ?? null;
+  if (first === "B") return options[1] ?? null;
+  if (first === "C") return options[2] ?? null;
+  if (first === "D") return options[3] ?? null;
+
+  return null;
+}
+
+function sanitizeGeneratedQuiz(raw: any[], unit: string): QuizQuestion[] {
+  if (!Array.isArray(raw)) return [];
+
+  const cleaned = raw
+    .map((g: any, idx: number) => {
+      const question = normalizeText(g?.question);
+      const explanation =
+        normalizeText(g?.explanation) ||
+        `This answer comes from the lesson content in ${unit}.`;
+
+      let options = Array.isArray(g?.options)
+        ? g.options.map(normalizeOption).filter(Boolean)
+        : [];
+
+      options = dedupeStrings(options);
+
+      const rawCorrectAnswer = normalizeText(g?.correctAnswer);
+      let correctAnswer = resolveCorrectAnswer(options, rawCorrectAnswer);
+
+      if (!question) return null;
+
+      if (options.length < 4) {
+        return null;
+      }
+
+      options = options.slice(0, 4);
+
+      if (!correctAnswer) {
+        correctAnswer = resolveCorrectAnswer(options, rawCorrectAnswer);
+      }
+
+      if (!correctAnswer) {
+        return null;
+      }
+
+      if (!options.some((opt: string) => opt.toLowerCase() === correctAnswer!.toLowerCase())) {
+        const replaced = dedupeStrings([correctAnswer, ...options]).slice(0, 4);
+        options = replaced;
+
+        if (!options.some((opt: string) => opt.toLowerCase() === correctAnswer!.toLowerCase())) {
+          return null;
+        }
+      }
+
+      correctAnswer =
+        options.find((opt: string) => opt.toLowerCase() === correctAnswer!.toLowerCase()) ??
+        correctAnswer;
+
+      const topic = normalizeText(g?.topic) || unit;
+
+      return {
+        id: idx + 1,
+        question,
+        options: shuffle(options),
+        correctAnswer,
+        topic,
+        explanation,
+        difficulty:
+          g?.difficulty === "Easy" ||
+          g?.difficulty === "Medium" ||
+          g?.difficulty === "Hard"
+            ? g.difficulty
+            : "Medium",
+        type: "AI Quiz" as const,
+      };
+    })
+    .filter(Boolean) as QuizQuestion[];
+
+  const uniqueByQuestion: QuizQuestion[] = [];
+  const seenQuestions = new Set<string>();
+
+  for (const item of cleaned) {
+    const key = item.question.toLowerCase();
+    if (seenQuestions.has(key)) continue;
+    seenQuestions.add(key);
+    uniqueByQuestion.push(item);
+  }
+
+  return uniqueByQuestion.slice(0, REQUIRED_QUESTION_COUNT);
+}
+
+function buildCombinedTranscriptForUnit(unit: string) {
+  const lessons = getLessonInfoByUnit(unit);
+
+  const combinedTranscript = lessons
+    .map(
+      (lesson) =>
+        `LESSON: ${lesson.title}
+TOPIC: ${lesson.topic}
+
+${lesson.transcript}`
+    )
+    .join("\n\n============================\n\n");
+
+  const topicLabel = lessons.map((l) => l.topic).join(", ");
+
+  return {
+    lessons,
+    combinedTranscript,
+    topicLabel,
+  };
+}
+
+/* ----------------------------- screen ---------------------------- */
 
 export default function Quizzes() {
   const insets = useSafeAreaInsets();
@@ -467,80 +556,20 @@ export default function Quizzes() {
     ? ({ writingDirection: "rtl" as const, textAlign: "right" as const } as const)
     : undefined;
 
-  // mode + questions
   const [mode, setMode] = useState<"quiz" | "practice">("quiz");
-  const [questions, setQuestions] = useState<QuizQuestion[]>(BASE_QUESTIONS);
-
-  // navigation + answers
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number, AnswerState>>({});
   const [done, setDone] = useState(false);
-
-  // wrong question ids from QUIZ mode
   const [wrongIds, setWrongIds] = useState<number[]>([]);
-
-  // explanation sheet
   const [showExplainSheet, setShowExplainSheet] = useState(false);
 
-  // AI quiz generation
-  const [showLessonSelector, setShowLessonSelector] = useState(false);
-  const [selectedUnit, setSelectedUnit] = useState("Unit 1: Place Value");
-  const [availableTranscripts, setAvailableTranscripts] = useState<LessonTranscript[]>([]);
-  const [isLoadingTranscripts, setIsLoadingTranscripts] = useState(false);
+  const [showUnitSelector, setShowUnitSelector] = useState(false);
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
-  // ✅ wrong-help nudge animation
-  const [showHelpNudge, setShowHelpNudge] = useState(false);
-  const nudgeOpacity = useRef(new Animated.Value(0)).current;
-  const nudgeY = useRef(new Animated.Value(10)).current;
-  const nudgeScale = useRef(new Animated.Value(0.98)).current;
-
-  function playNudge() {
-    setShowHelpNudge(true);
-    nudgeOpacity.setValue(0);
-    nudgeY.setValue(10);
-    nudgeScale.setValue(0.98);
-
-    Animated.parallel([
-      Animated.timing(nudgeOpacity, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-      Animated.timing(nudgeY, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-      Animated.spring(nudgeScale, {
-        toValue: 1,
-        friction: 7,
-        tension: 120,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }
-
-  function hideNudge() {
-    setShowHelpNudge(false);
-    nudgeOpacity.stopAnimation();
-    nudgeY.stopAnimation();
-    nudgeScale.stopAnimation();
-  }
-
-  const goAskAI = () => {
-    // NOTE: Make sure you have this route in your app.
-    // If your AI tab path is different, change "/tabs/ai" accordingly.
-    router.push({
-      pathname: "/tabs/ai" as any,
-      params: {
-        question: q?.question ?? "",
-        userAnswer: selected ?? "",
-        correctAnswer: q?.correctAnswer ?? "",
-        topic: q?.topic ?? "",
-      },
-    });
-  };
+  const units = useMemo(() => Array.from(new Set(LESSON_INFO.map((x) => x.unit))), []);
 
   useEffect(() => {
     (async () => {
@@ -549,17 +578,6 @@ export default function Quizzes() {
       setLang(LANGS.includes(l) ? l : "English");
     })();
   }, []);
-
-  useEffect(() => {
-    if (!showLessonSelector) return;
-    setIsLoadingTranscripts(true);
-    try {
-      const transcripts = getLessonInfoByUnit(selectedUnit);
-      setAvailableTranscripts(transcripts);
-    } finally {
-      setIsLoadingTranscripts(false);
-    }
-  }, [showLessonSelector, selectedUnit]);
 
   const total = questions.length;
   const q = questions[current];
@@ -586,145 +604,13 @@ export default function Quizzes() {
 
   const answeredCorrect = !!q && isAnswered && selected === q.correctAnswer;
 
-  const selectOption = (opt: string) => {
-    if (done) return;
-    if (isAnswered) return;
-    if (!q) return;
+  const wrongQuestions = useMemo(() => {
+    return questions.filter((qq) => wrongIds.includes(qq.id));
+  }, [questions, wrongIds]);
 
-    hideNudge(); // reset nudge when changing selection
-
-    setAnswers((prev) => ({
-      ...prev,
-      [q.id]: { selected: opt, isAnswered: false },
-    }));
-  };
-
-  const submit = () => {
-    if (done) return;
-    if (!q) return;
-    if (selected == null) return;
-    if (isAnswered) return;
-
-    const isWrong = selected !== q.correctAnswer;
-
-    setAnswers((prev) => ({
-      ...prev,
-      [q.id]: { selected, isAnswered: true },
-    }));
-
-    if (mode === "quiz" && isWrong) {
-      setWrongIds((ids) => (ids.includes(q.id) ? ids : [...ids, q.id]));
-    }
-
-    // ✅ show nudge if wrong
-    if (isWrong) {
-      playNudge();
-    } else {
-      hideNudge();
-    }
-  };
-
-  const goNextOrFinish = () => {
-    if (done) return;
-    if (!isAnswered) return;
-
-    hideNudge();
-
-    if (current < total - 1) {
-      setCurrent((i) => i + 1);
-    } else {
-      setDone(true);
-    }
-  };
-
-  const backQuestion = () => {
-    if (done) return;
-
-    hideNudge();
-
-    if (current > 0) {
-      setCurrent((i) => Math.max(0, i - 1));
-      return;
-    }
-    router.back();
-  };
-
-  const explainNow = () => {
-    if (!q) return;
-    setShowExplainSheet(true);
-  };
-
-  const restartQuiz = () => {
-    setMode("quiz");
-    setQuestions(BASE_QUESTIONS);
-    setCurrent(0);
-    setAnswers({});
-    setWrongIds([]);
-    setDone(false);
-    setShowExplainSheet(false);
-    hideNudge();
-  };
-
-  const startPracticeWrong = () => {
-    const wrong = BASE_QUESTIONS.filter((qq) => wrongIds.includes(qq.id));
-    if (wrong.length === 0) return;
-
-    setMode("practice");
-    setQuestions(
-      wrong.map((qq) => ({
-        ...qq,
-        type: "Practice",
-      }))
-    );
-    setCurrent(0);
-    setAnswers({});
-    setDone(false);
-    setShowExplainSheet(false);
-    hideNudge();
-  };
-
-  async function generateAIQuiz(lesson: LessonTranscript) {
-    setShowLessonSelector(false);
-    setIsGeneratingQuiz(true);
-
-    try {
-      const generated = await generateQuizFromTranscript(
-        lesson.transcript,
-        lesson.title,
-        lesson.topic
-      );
-
-      if (generated && generated.length > 0) {
-        const quizQuestions: QuizQuestion[] = generated.map((g: any, idx: number) => ({
-          id: typeof g.id === "number" ? g.id : idx + 1,
-          question: g.question,
-          options: g.options,
-          correctAnswer: g.correctAnswer,
-          topic: g.topic ?? lesson.topic ?? "Lesson",
-          explanation: g.explanation ?? "",
-          difficulty: g.difficulty ?? "Medium",
-          type: "AI Quiz",
-        }));
-
-        setMode("quiz");
-        setQuestions(quizQuestions);
-
-        setCurrent(0);
-        setAnswers({});
-        setWrongIds([]);
-        setDone(false);
-        setShowExplainSheet(false);
-        hideNudge();
-      }
-    } catch (e) {
-      console.error("AI quiz generation error:", e);
-    } finally {
-      setIsGeneratingQuiz(false);
-    }
-  }
-
-  const headerTagType = q?.type ?? (mode === "practice" ? T.practice : T.premade);
-  const headerTagDiff = q?.difficulty ?? "Medium";
+  const targetTopics = useMemo(() => {
+    return Array.from(new Set(wrongQuestions.map((x) => x.topic))).slice(0, 3);
+  }, [wrongQuestions]);
 
   const resultPct = total === 0 ? 0 : Math.round((score / total) * 100);
   const starCount = starsForPct(resultPct);
@@ -743,12 +629,173 @@ export default function Quizzes() {
     return "sparkles";
   }, [resultPct]);
 
-  const wrongCount = wrongIds.length;
-  const targetTopics = useMemo(() => {
-    const wrongQs = BASE_QUESTIONS.filter((qq) => wrongIds.includes(qq.id));
-    const topics = Array.from(new Set(wrongQs.map((x) => x.topic)));
-    return topics.slice(0, 3);
-  }, [wrongIds]);
+  const goAskAI = () => {
+    router.push({
+      pathname: "/tabs/ai" as any,
+      params: {
+        question: q?.question ?? "",
+        userAnswer: selected ?? "",
+        correctAnswer: q?.correctAnswer ?? "",
+        topic: q?.topic ?? "",
+      },
+    });
+  };
+
+  const resetQuizState = () => {
+    setCurrent(0);
+    setAnswers({});
+    setWrongIds([]);
+    setDone(false);
+    setShowExplainSheet(false);
+  };
+
+  const selectOption = (opt: string) => {
+    if (done || isAnswered || !q) return;
+
+    setAnswers((prev) => ({
+      ...prev,
+      [q.id]: { selected: opt, isAnswered: false },
+    }));
+  };
+
+  const submit = () => {
+    if (done || !q || selected == null || isAnswered) return;
+
+    const isWrong = selected !== q.correctAnswer;
+
+    setAnswers((prev) => ({
+      ...prev,
+      [q.id]: { selected, isAnswered: true },
+    }));
+
+    if (isWrong) {
+      setWrongIds((ids) => (ids.includes(q.id) ? ids : [...ids, q.id]));
+    }
+  };
+
+  const goNextOrFinish = () => {
+    if (done || !isAnswered) return;
+
+    if (current < total - 1) {
+      setCurrent((i) => i + 1);
+    } else {
+      setDone(true);
+    }
+  };
+
+  const backQuestion = () => {
+    if (done) return;
+
+    if (current > 0) {
+      setCurrent((i) => Math.max(0, i - 1));
+      return;
+    }
+
+    router.back();
+  };
+
+  const explainNow = () => {
+    if (!q) return;
+    setShowExplainSheet(true);
+  };
+
+  const startPracticeWrong = () => {
+    if (wrongQuestions.length === 0) return;
+
+    setMode("practice");
+    setQuestions(
+      wrongQuestions.map((qq, idx) => ({
+        ...qq,
+        id: idx + 1,
+        type: "Practice",
+      }))
+    );
+    resetQuizState();
+  };
+
+  async function tryGenerateQuestionsForUnit(unit: string): Promise<QuizQuestion[]> {
+    const { lessons, combinedTranscript, topicLabel } = buildCombinedTranscriptForUnit(unit);
+
+    if (!lessons.length || !combinedTranscript.trim()) {
+      return [];
+    }
+
+    const firstAttempt = await generateQuizFromTranscript(
+      combinedTranscript,
+      unit,
+      topicLabel
+    );
+
+    const firstSanitized = sanitizeGeneratedQuiz(firstAttempt, unit);
+
+    console.log("First sanitized quiz count:", firstSanitized.length);
+
+    if (firstSanitized.length >= REQUIRED_QUESTION_COUNT) {
+      return firstSanitized;
+    }
+
+    const secondAttempt = await generateQuizFromTranscript(
+      combinedTranscript,
+      unit,
+      topicLabel
+    );
+
+    const secondSanitized = sanitizeGeneratedQuiz(secondAttempt, unit);
+
+    console.log("Second sanitized quiz count:", secondSanitized.length);
+
+    return secondSanitized;
+  }
+
+  async function startChallengeForSelectedUnit() {
+    if (!selectedUnit) return;
+
+    setIsGeneratingQuiz(true);
+    setGenerationError(null);
+    resetQuizState();
+    setQuestions([]);
+
+    try {
+      const finalQuestions = await tryGenerateQuestionsForUnit(selectedUnit);
+
+      if (finalQuestions.length === 0) {
+        setGenerationError("AI returned no valid quiz questions.");
+        setQuestions([]);
+        return;
+      }
+
+      if (finalQuestions.length < REQUIRED_QUESTION_COUNT) {
+        setGenerationError(
+          `Only ${finalQuestions.length} valid questions were generated. Please try again.`
+        );
+        setQuestions([]);
+        return;
+      }
+
+      setMode("quiz");
+      setQuestions(finalQuestions);
+      setCurrent(0);
+    } catch (err) {
+      console.error("Start challenge error:", err);
+      setGenerationError("Failed to generate quiz.");
+      setQuestions([]);
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
+  }
+
+  const restartQuiz = async () => {
+    if (!selectedUnit) {
+      setQuestions([]);
+      resetQuizState();
+      return;
+    }
+    await startChallengeForSelectedUnit();
+  };
+
+  const hasQuiz = questions.length > 0;
+  const headerTagType = q?.type ?? (mode === "practice" ? T.practice : T.aiQuiz);
+  const headerTagDiff = q?.difficulty ?? "Medium";
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -784,15 +831,19 @@ export default function Quizzes() {
         >
           <View style={styles.shell}>
             <View style={styles.quizCard}>
-              {/* Fun header */}
               <View style={styles.funHeaderRow}>
                 <View style={styles.funHeaderLeft}>
-                  <View style={styles.funIcon}>
-                    <Ionicons name="school" size={18} color="#fff" />
-                  </View>
+                  <LinearGradient
+                    colors={["#5B35F2", "#FF7A59"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.funIcon}
+                  >
+                    <Ionicons name="game-controller" size={18} color="#fff" />
+                  </LinearGradient>
                   <View>
-                    <Text style={styles.funTitle}>Offklass Quizzes</Text>
-                    <Text style={styles.funSub}>Let’s learn + play 🎯</Text>
+                    <Text style={styles.funTitle}>Offklass Quiz Adventure</Text>
+                    <Text style={styles.funSub}>{T.challengeMode} 🎯</Text>
                   </View>
                 </View>
 
@@ -804,32 +855,88 @@ export default function Quizzes() {
                 </Pressable>
               </View>
 
-              {/* Top row */}
-              <View style={styles.topRow}>
-                <Text style={[styles.qOf, rtl]}>{T.qOf(current + 1, total)}</Text>
-                <Text style={[styles.score, rtl]}>
-                  {T.score}: <Text style={styles.scoreNum}>{score}</Text> / {total}
-                </Text>
-              </View>
+              {!hasQuiz && !isGeneratingQuiz ? (
+                <View style={styles.lobbyWrap}>
+                  <LinearGradient colors={["#FFFFFF", "#F8F4FF"]} style={styles.lobbyHero}>
+                    <View style={styles.lobbyTopRow}>
+                      <View style={styles.lobbyBadge}>
+                        <Ionicons name="sparkles" size={16} color="#5B35F2" />
+                        <Text style={styles.lobbyBadgeText}>{T.gameReady}</Text>
+                      </View>
+                    </View>
 
-              {/* progress */}
-              <View style={styles.progressOuter}>
-                <View style={[styles.progressInner, { width: `${progressPct}%` }]} />
-              </View>
+                    <View style={styles.lobbyHeroMain}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.lobbyTitle, rtl]}>{T.lobbyTitle}</Text>
+                        <Text style={[styles.lobbySub, rtl]}>{T.lobbySub}</Text>
 
-              {/* AI quiz generator */}
-              {!done && !isGeneratingQuiz && mode === "quiz" && (
-                <Pressable
-                  onPress={() => setShowLessonSelector(true)}
-                  style={({ pressed }) => [styles.genBtn, pressed && { opacity: 0.92 }]}
-                >
-                  <Ionicons name="sparkles" size={18} color="#fff" />
-                  <Text style={styles.genBtnText}>{T.genBtn}</Text>
-                </Pressable>
-              )}
+                        <View style={styles.unitPreviewPill}>
+                          <Ionicons name="book-outline" size={16} color="#111827" />
+                          <Text style={styles.unitPreviewText}>
+                            {selectedUnit
+                              ? `${T.selected}: ${selectedUnit}`
+                              : `${T.unitLabel}: —`}
+                          </Text>
+                        </View>
+                      </View>
 
-              {/* Generating */}
-              {isGeneratingQuiz ? (
+                      <View style={styles.lobbyMascotWrap}>
+                        <View style={styles.lobbyMascotBig}>
+                          <Ionicons name="rocket-outline" size={34} color="#5B35F2" />
+                        </View>
+                        <View style={styles.lobbyMascotSmall}>
+                          <Ionicons name="star" size={14} color="#FF7A59" />
+                        </View>
+                      </View>
+                    </View>
+                  </LinearGradient>
+
+                  <View style={styles.lobbyActions}>
+                    <Pressable
+                      onPress={() => setShowUnitSelector(true)}
+                      style={({ pressed }) => [
+                        styles.lobbyUnitBtn,
+                        pressed && { opacity: 0.92 },
+                      ]}
+                    >
+                      <Ionicons name="library-outline" size={18} color="#111827" />
+                      <Text style={styles.lobbyUnitBtnText}>{T.chooseUnit}</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={startChallengeForSelectedUnit}
+                      disabled={!selectedUnit}
+                      style={({ pressed }) => [
+                        styles.lobbyStartBtn,
+                        (!selectedUnit || pressed) && { opacity: !selectedUnit ? 0.55 : 0.92 },
+                      ]}
+                    >
+                      <Ionicons name="play" size={18} color="#fff" />
+                      <Text style={styles.lobbyStartBtnText}>{T.startChallenge}</Text>
+                    </Pressable>
+                  </View>
+
+                  {generationError ? (
+                    <View style={styles.errorCard}>
+                      <Ionicons name="alert-circle-outline" size={20} color="#DC2626" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.errorTitle}>{T.aiFailTitle}</Text>
+                        <Text style={styles.errorSub}>
+                          {generationError || T.aiFailSub}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.emptyHintCard}>
+                      <Ionicons name="bulb-outline" size={18} color="#5B35F2" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.emptyHintTitle}>{T.emptyTitle}</Text>
+                        <Text style={styles.emptyHintSub}>{T.emptySub}</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              ) : isGeneratingQuiz ? (
                 <View style={styles.thinkingCard}>
                   <ActivityIndicator size="large" color="#5B35F2" />
                   <Text style={[styles.thinkingTitle, rtl]}>{T.thinkingTitle}</Text>
@@ -837,25 +944,48 @@ export default function Quizzes() {
                 </View>
               ) : !done ? (
                 <>
-                  {/* tags */}
-                  <View style={styles.tagsRow}>
-                    <View style={[styles.tag, styles.tagGreen]}>
-                      <Text style={styles.tagTextGreen}>
-                        {headerTagType === "AI Quiz" ? T.aiQuiz : headerTagType}
-                      </Text>
-                    </View>
-                    <View style={[styles.tag, styles.tagPurple]}>
-                      <Text style={styles.tagTextPurple}>{headerTagDiff}</Text>
+                  <View style={styles.topRow}>
+                    <Text style={[styles.qOf, rtl]}>{T.qOf(current + 1, total)}</Text>
+                    <Text style={[styles.score, rtl]}>
+                      {T.score}: <Text style={styles.scoreNum}>{score}</Text> / {total}
+                    </Text>
+                  </View>
+
+                  <View style={styles.progressOuter}>
+                    <LinearGradient
+                      colors={["#5B35F2", "#56CCF2", "#22C55E"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.progressInnerGradient, { width: `${progressPct}%` }]}
+                    />
+                  </View>
+
+                  <View style={styles.quizTopTools}>
+                    <View style={styles.tagsRow}>
+                      <View style={[styles.tag, styles.tagGreen]}>
+                        <Text style={styles.tagTextGreen}>
+                          {headerTagType === "AI Quiz" ? T.aiQuiz : headerTagType}
+                        </Text>
+                      </View>
+
+                      <View style={[styles.tag, styles.tagPurple]}>
+                        <Text style={styles.tagTextPurple}>{headerTagDiff}</Text>
+                      </View>
                     </View>
                   </View>
 
-                  {/* question */}
+                  {!!selectedUnit && (
+                    <View style={styles.currentUnitChip}>
+                      <Ionicons name="bookmarks-outline" size={14} color="#111827" />
+                      <Text style={styles.currentUnitChipText}>{selectedUnit}</Text>
+                    </View>
+                  )}
+
                   <Text style={[styles.question, rtl]}>{q?.question ?? "—"}</Text>
 
-                  {/* options */}
                   {!!q && (
                     <View style={{ gap: 12 }}>
-                      {q.options.map((opt) => {
+                      {q.options.map((opt, idx) => {
                         const isSel = selected === opt;
                         const isCorrect = opt === q.correctAnswer;
 
@@ -885,13 +1015,20 @@ export default function Quizzes() {
 
                         return (
                           <TouchableOpacity
-                            key={opt}
+                            key={`${opt}-${idx}`}
                             activeOpacity={0.85}
                             disabled={isAnswered}
                             onPress={() => selectOption(opt)}
                             style={[styles.optionBase, boxStyle]}
                           >
+                            <View style={styles.optionBadge}>
+                              <Text style={styles.optionBadgeText}>
+                                {String.fromCharCode(65 + idx)}
+                              </Text>
+                            </View>
+
                             <Text style={[styles.optionTextBase, textStyle, rtl]}>{opt}</Text>
+
                             {!!rightIcon && (
                               <Ionicons
                                 name={rightIcon}
@@ -905,9 +1042,13 @@ export default function Quizzes() {
                     </View>
                   )}
 
-                  {/* feedback banner */}
                   {!!q && isAnswered && (
-                    <View style={[styles.feedbackBanner, answeredCorrect ? styles.bannerOk : styles.bannerBad]}>
+                    <View
+                      style={[
+                        styles.feedbackBanner,
+                        answeredCorrect ? styles.bannerOk : styles.bannerBad,
+                      ]}
+                    >
                       <Text
                         style={[
                           styles.bannerText,
@@ -920,59 +1061,25 @@ export default function Quizzes() {
                     </View>
                   )}
 
-                  {/* ✅ "You got this wrong — want help?" animated nudge */}
-                  {!!q && isAnswered && !answeredCorrect && showHelpNudge && (
-                    <Animated.View
-                      style={[
-                        styles.helpNudge,
-                        {
-                          opacity: nudgeOpacity,
-                          transform: [{ translateY: nudgeY }, { scale: nudgeScale }],
-                        },
-                      ]}
+                  <View style={{ marginTop: 14, gap: 10 }}>
+                    <Pressable
+                      onPress={explainNow}
+                      style={({ pressed }) => [styles.hintBtn, pressed && { opacity: 0.92 }]}
                     >
-                      <View style={styles.helpNudgeLeft}>
-                        <View style={styles.helpNudgeIcon}>
-                          <Ionicons name="sparkles" size={16} color="#fff" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.helpNudgeTitle, rtl]}>{T.needHelpTitle}</Text>
-                          <Text style={[styles.helpNudgeSub, rtl]}>{T.needHelpSub}</Text>
-                        </View>
-                      </View>
+                      <Ionicons name="bulb" size={18} color="#111827" />
+                      <Text style={styles.hintBtnText}>{T.explain}</Text>
+                      <Ionicons name="chevron-forward" size={18} color="#111827" />
+                    </Pressable>
 
-                      <Pressable
-                        onPress={goAskAI}
-                        style={({ pressed }) => [styles.helpNudgeBtn, pressed && { opacity: 0.92 }]}
-                      >
-                        <Text style={styles.helpNudgeBtnText}>{T.askAI}</Text>
-                      </Pressable>
-                    </Animated.View>
-                  )}
+                    <Pressable
+                      onPress={goAskAI}
+                      style={({ pressed }) => [styles.askAIBtn, pressed && { opacity: 0.92 }]}
+                    >
+                      <Ionicons name="sparkles" size={18} color="#fff" />
+                      <Text style={styles.askAIBtnText}>{T.askAI}</Text>
+                    </Pressable>
+                  </View>
 
-                  {/* Explain + Ask AI (under explain) */}
-                  {!done && !isGeneratingQuiz && (
-                    <View style={{ marginTop: 14, gap: 10 }}>
-                      <Pressable
-                        onPress={explainNow}
-                        style={({ pressed }) => [styles.hintBtn, pressed && { opacity: 0.92 }]}
-                      >
-                        <Ionicons name="bulb" size={18} color="#111827" />
-                        <Text style={styles.hintBtnText}>{T.explain}</Text>
-                        <Ionicons name="chevron-forward" size={18} color="#111827" />
-                      </Pressable>
-
-                      <Pressable
-                        onPress={goAskAI}
-                        style={({ pressed }) => [styles.askAIBtn, pressed && { opacity: 0.92 }]}
-                      >
-                        <Ionicons name="sparkles" size={18} color="#fff" />
-                        <Text style={styles.askAIBtnText}>{T.askAI}</Text>
-                      </Pressable>
-                    </View>
-                  )}
-
-                  {/* bottom buttons */}
                   <View style={styles.bottomRow}>
                     <Pressable
                       onPress={backQuestion}
@@ -1008,7 +1115,6 @@ export default function Quizzes() {
                   </View>
                 </>
               ) : (
-                // DONE
                 <View style={styles.doneWrap}>
                   <LinearGradient
                     colors={["#FF7A59", "#FFD54A", "#56CCF2"]}
@@ -1074,7 +1180,7 @@ export default function Quizzes() {
                           <View style={styles.rewardIcon}>
                             <Ionicons name="diamond" size={16} color="#5B35F2" />
                           </View>
-                          <Text style={styles.rewardText}>Streak Boost</Text>
+                          <Text style={styles.rewardText}>Brain Power Boost</Text>
                         </View>
 
                         <View style={styles.rewardRow}>
@@ -1090,11 +1196,13 @@ export default function Quizzes() {
                       <Text style={styles.smallCardTitle}>{T.wrongTitle}</Text>
                       <View style={{ marginTop: 10 }}>
                         {mode === "quiz" ? (
-                          wrongCount === 0 ? (
+                          wrongIds.length === 0 ? (
                             <Text style={styles.targetsText}>{T.noWrong}</Text>
                           ) : (
                             <>
-                              <Text style={styles.targetsText}>{wrongCount} questions to practice</Text>
+                              <Text style={styles.targetsText}>
+                                {wrongIds.length} questions to practice
+                              </Text>
                               <View style={{ marginTop: 10, gap: 8 }}>
                                 {targetTopics.map((tpc) => (
                                   <View key={tpc} style={styles.targetPill}>
@@ -1114,7 +1222,7 @@ export default function Quizzes() {
                     </View>
                   </View>
 
-                  {mode === "quiz" && wrongCount > 0 && (
+                  {mode === "quiz" && wrongIds.length > 0 && (
                     <Pressable
                       onPress={startPracticeWrong}
                       style={({ pressed }) => [styles.donePracticeBtn, pressed && { opacity: 0.92 }]}
@@ -1132,14 +1240,6 @@ export default function Quizzes() {
                     <Text style={styles.doneReplayText}>{T.playAgain}</Text>
                   </Pressable>
 
-                  <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [styles.doneExitBtn, pressed && { opacity: 0.92 }]}
-                  >
-                    <Ionicons name="home" size={18} color="#111827" />
-                    <Text style={styles.doneExitText}>Go Back</Text>
-                  </Pressable>
-
                   <View style={{ marginTop: 12 }}>
                     <NextStepFooter
                       onPlayAgain={restartQuiz}
@@ -1153,7 +1253,6 @@ export default function Quizzes() {
           </View>
         </ScrollView>
 
-        {/* Explanation modal */}
         <Modal
           visible={showExplainSheet}
           transparent
@@ -1178,7 +1277,6 @@ export default function Quizzes() {
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={[styles.sheetText, rtl]}>{q?.explanation ?? ""}</Text>
 
-                {/* ✅ Ask Offklass AI inside explain sheet too */}
                 <View style={{ marginTop: 12, gap: 10 }}>
                   <Pressable
                     onPress={goAskAI}
@@ -1201,52 +1299,68 @@ export default function Quizzes() {
           </Pressable>
         </Modal>
 
-        {/* Lesson selector modal (AI quiz) */}
         <Modal
-          visible={showLessonSelector}
+          visible={showUnitSelector}
           transparent
           animationType="fade"
-          onRequestClose={() => setShowLessonSelector(false)}
+          onRequestClose={() => setShowUnitSelector(false)}
         >
-          <Pressable style={styles.sheetBackdrop} onPress={() => setShowLessonSelector(false)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setShowUnitSelector(false)}>
             <Pressable style={[styles.sheetCard, { maxHeight: "80%" }]} onPress={() => {}}>
               <View style={styles.sheetTop}>
-                <Text style={styles.sheetTitle}>{T.selectLesson}</Text>
-                <Pressable onPress={() => setShowLessonSelector(false)} style={styles.sheetClose}>
+                <Text style={styles.sheetTitle}>{T.selectUnit}</Text>
+                <Pressable onPress={() => setShowUnitSelector(false)} style={styles.sheetClose}>
                   <Ionicons name="close" size={18} color="#111827" />
                 </Pressable>
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false}>
-                {isLoadingTranscripts ? (
-                  <View style={{ paddingVertical: 24, alignItems: "center" }}>
-                    <ActivityIndicator color="#5B35F2" />
-                    <Text style={{ marginTop: 10, fontWeight: "900", color: "rgba(17,24,39,0.7)" }}>
-                      Loading lessons...
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={{ gap: 10 }}>
-                    {availableTranscripts.map((t) => (
+                <View style={{ gap: 10 }}>
+                  {units.map((unit) => {
+                    const lessons = getLessonInfoByUnit(unit);
+                    const selectedNow = selectedUnit === unit;
+
+                    return (
                       <Pressable
-                        key={t.lessonId}
-                        onPress={() => generateAIQuiz(t)}
-                        style={({ pressed }) => [styles.lessonOption, pressed && { opacity: 0.92 }]}
+                        key={unit}
+                        onPress={() => {
+                          setSelectedUnit(unit);
+                          setGenerationError(null);
+                          setShowUnitSelector(false);
+                        }}
+                        style={({ pressed }) => [
+                          styles.lessonOption,
+                          selectedNow && styles.lessonOptionSelected,
+                          pressed && { opacity: 0.92 },
+                        ]}
                       >
-                        <Text style={[styles.lessonTitle, rtl]} numberOfLines={2}>
-                          {t.title}
-                        </Text>
-                        <Text style={[styles.lessonSub, rtl]} numberOfLines={1}>
-                          {t.topic}
+                        <View style={styles.unitOptionTop}>
+                          <Text style={[styles.lessonTitle, rtl]} numberOfLines={2}>
+                            {unit}
+                          </Text>
+
+                          {selectedNow ? (
+                            <View style={styles.unitSelectedBadge}>
+                              <Ionicons name="checkmark" size={14} color="#fff" />
+                            </View>
+                          ) : (
+                            <View style={styles.unitLessonCount}>
+                              <Text style={styles.unitLessonCountText}>{lessons.length}</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <Text style={[styles.lessonSub, rtl]} numberOfLines={2}>
+                          {lessons.map((l) => l.title).join(" • ")}
                         </Text>
                       </Pressable>
-                    ))}
-                  </View>
-                )}
+                    );
+                  })}
+                </View>
 
                 <View style={{ marginTop: 14 }}>
                   <Pressable
-                    onPress={() => setShowLessonSelector(false)}
+                    onPress={() => setShowUnitSelector(false)}
                     style={({ pressed }) => [styles.lessonCancel, pressed && { opacity: 0.92 }]}
                   >
                     <Text style={styles.lessonCancelText}>{T.cancel}</Text>
@@ -1261,7 +1375,7 @@ export default function Quizzes() {
   );
 }
 
-/* --------------------------------- Styles --------------------------------- */
+/* ----------------------------- styles ---------------------------- */
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "transparent" },
@@ -1332,7 +1446,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: "#5B35F2",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1349,6 +1462,177 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  lobbyWrap: {
+    marginTop: 6,
+    gap: 14,
+  },
+  lobbyHero: {
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(91,53,242,0.10)",
+  },
+  lobbyTopRow: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
+  },
+  lobbyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(91,53,242,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(91,53,242,0.15)",
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  lobbyBadgeText: {
+    color: "#5B35F2",
+    fontWeight: "900",
+  },
+  lobbyHeroMain: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  lobbyTitle: {
+    color: INK,
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  lobbySub: {
+    marginTop: 8,
+    color: "rgba(17,24,39,0.72)",
+    lineHeight: 20,
+    fontWeight: "800",
+  },
+  unitPreviewPill: {
+    marginTop: 14,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.88)",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+  },
+  unitPreviewText: {
+    color: INK,
+    fontWeight: "900",
+  },
+  lobbyMascotWrap: {
+    width: 100,
+    height: 100,
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lobbyMascotBig: {
+    width: 76,
+    height: 76,
+    borderRadius: 999,
+    backgroundColor: "#F3EDFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lobbyMascotSmall: {
+    position: "absolute",
+    top: 6,
+    right: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: "#FFF1E8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lobbyActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  lobbyUnitBtn: {
+    flex: 1,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "rgba(17,24,39,0.10)",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  lobbyUnitBtnText: {
+    color: INK,
+    fontWeight: "900",
+  },
+  lobbyStartBtn: {
+    flex: 1,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    backgroundColor: "#5B35F2",
+    borderWidth: 2,
+    borderColor: "#5B35F2",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  lobbyStartBtnText: {
+    color: "#fff",
+    fontWeight: "900",
+  },
+  emptyHintCard: {
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: "rgba(91,53,242,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(91,53,242,0.14)",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  emptyHintTitle: {
+    color: INK,
+    fontWeight: "900",
+  },
+  emptyHintSub: {
+    marginTop: 4,
+    color: "rgba(17,24,39,0.72)",
+    fontWeight: "800",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+
+  errorCard: {
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: "rgba(220,38,38,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(220,38,38,0.18)",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  errorTitle: {
+    color: "#991B1B",
+    fontWeight: "900",
+  },
+  errorSub: {
+    marginTop: 4,
+    color: "rgba(17,24,39,0.72)",
+    fontWeight: "800",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   qOf: { color: "rgba(17,24,39,0.72)", fontWeight: "900" },
   score: { color: "rgba(47,107,255,0.95)", fontWeight: "900" },
@@ -1361,22 +1645,37 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(47,107,255,0.14)",
     overflow: "hidden",
   },
-  progressInner: { height: "100%", borderRadius: 999, backgroundColor: "#5B35F2" },
+  progressInnerGradient: {
+    height: "100%",
+    borderRadius: 999,
+  },
 
-  genBtn: {
+  quizTopTools: {
     marginTop: 12,
-    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    backgroundColor: "#FF7A59",
-    borderWidth: 1,
-    borderColor: "rgba(255,122,89,0.30)",
   },
-  genBtnText: { color: "#fff", fontWeight: "900" },
+
+  currentUnitChip: {
+    alignSelf: "flex-start",
+    marginTop: 10,
+    marginBottom: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "rgba(255,213,74,0.35)",
+    borderWidth: 1,
+    borderColor: "rgba(255,213,74,0.55)",
+  },
+  currentUnitChipText: {
+    color: INK,
+    fontWeight: "900",
+  },
 
   thinkingCard: {
     marginTop: 14,
@@ -1391,7 +1690,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   thinkingTitle: { marginTop: 10, fontSize: 18, fontWeight: "900", color: INK },
-  thinkingSub: { fontWeight: "800", color: "rgba(17,24,39,0.65)" },
+  thinkingSub: { fontWeight: "800", color: "rgba(17,24,39,0.65)", textAlign: "center" },
 
   tagsRow: { flexDirection: "row", gap: 10, marginTop: 14, marginBottom: 12 },
   tag: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1 },
@@ -1411,6 +1710,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
+  },
+  optionBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    backgroundColor: "rgba(17,24,39,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionBadgeText: {
+    color: INK,
+    fontWeight: "900",
   },
   optionTextBase: { flex: 1, fontSize: 16, fontWeight: "900" },
 
@@ -1436,38 +1747,6 @@ const styles = StyleSheet.create({
   bannerOk: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.25)" },
   bannerBad: { backgroundColor: "rgba(220,38,38,0.08)", borderColor: "rgba(220,38,38,0.20)" },
   bannerText: { fontWeight: "900" },
-
-  /* ✅ help nudge */
-  helpNudge: {
-    marginTop: 10,
-    borderRadius: 18,
-    padding: 12,
-    backgroundColor: "rgba(91,53,242,0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(91,53,242,0.22)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  helpNudgeLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
-  helpNudgeIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    backgroundColor: "#5B35F2",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  helpNudgeTitle: { color: INK, fontWeight: "900" },
-  helpNudgeSub: { marginTop: 2, color: "rgba(17,24,39,0.70)", fontWeight: "800", fontSize: 12 },
-  helpNudgeBtn: {
-    backgroundColor: "#5B35F2",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  helpNudgeBtnText: { color: "#fff", fontWeight: "900" },
 
   hintBtn: {
     width: "100%",
@@ -1639,20 +1918,6 @@ const styles = StyleSheet.create({
   },
   doneReplayText: { color: "#fff", fontWeight: "900", fontSize: 16 },
 
-  doneExitBtn: {
-    marginTop: 10,
-    backgroundColor: "rgba(17,24,39,0.06)",
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 10,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)",
-  },
-  doneExitText: { color: INK, fontWeight: "900", fontSize: 16 },
-
   sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.30)", justifyContent: "center", padding: 16 },
   sheetCard: {
     backgroundColor: "#fff",
@@ -1703,7 +1968,39 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.08)",
     backgroundColor: "rgba(17,24,39,0.04)",
   },
-  lessonTitle: { color: INK, fontWeight: "900" },
+  lessonOptionSelected: {
+    borderColor: "#5B35F2",
+    backgroundColor: "rgba(91,53,242,0.08)",
+  },
+  unitOptionTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  unitLessonCount: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: "#5B35F2",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  unitLessonCountText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 12,
+  },
+  unitSelectedBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: "#16A34A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lessonTitle: { color: INK, fontWeight: "900", flex: 1 },
   lessonSub: { marginTop: 4, color: "rgba(17,24,39,0.65)", fontWeight: "800", fontSize: 12 },
 
   lessonCancel: {

@@ -1,12 +1,24 @@
-// app/tabs/home.tsx (or wherever your Home screen lives)
-// ✅ Childish / playful background ONLY on Home (no game vibe, more kids-learning vibe)
+// app/tabs/home.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Dimensions, Modal } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Dimensions,
+  Modal,
+  ScrollView,
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 
-import { loadJSON, saveJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
+import {
+  loadJSON,
+  saveJSON,
+  ONBOARD_KEY,
+  type OnboardingData,
+} from "../../lib/storage";
 import { getHomeSnapshot } from "../../lib/progress";
 
 /* ------------------------------- i18n helpers ------------------------------ */
@@ -22,26 +34,36 @@ const L10N = {
     math: "Math",
     selectGrade: "Select grade - Maths",
     comingSoon: "Coming Soon",
-    unit: "Unit",
+    active: "Ready to learn",
+    continueTitle: "Continue learning",
+    continueBody: "Pick a section and keep going on your learning journey.",
+    exploreTitle: "Explore",
+    exploreBody: "Tap any card below to start learning, practicing, or asking for help.",
     labels: {
       lessons: "Lessons",
       quizzes: "Quizzes",
       flash: "Flashcards",
-      ai: "AI",
+      ai: "AI Helper",
     },
-    hint: "Tap an icon to open that section.",
-    active: "Active",
+    cardDesc: {
+      lessons: "Watch fun lessons step-by-step",
+      quizzes: "Test what you learned",
+      flash: "Review important ideas fast",
+      ai: "Ask questions anytime",
+    },
+    hint: "Tap a card to open that section.",
     intro: {
       title: "Quick tour",
       skip: "Skip",
       next: "Next",
       back: "Back",
       done: "Done",
+      tapHint: "Tap the highlighted card to continue.",
       steps: [
-        { title: "Lessons", body: "Tap here to watch videos and learn step-by-step." },
-        { title: "Quizzes", body: "Test yourself with quick quizzes after learning." },
-        { title: "Flashcards", body: "Practice and remember key ideas with flashcards." },
-        { title: "AI Helper", body: "Ask AI when you get stuck and need help." },
+        { title: "Lessons", body: "Watch kid-friendly videos and learn step-by-step." },
+        { title: "Quizzes", body: "Try a quiz to check what you remember." },
+        { title: "Flashcards", body: "Use flashcards to practice quickly." },
+        { title: "AI Helper", body: "Ask AI whenever you need help." },
       ],
     },
   },
@@ -52,21 +74,36 @@ const L10N = {
     math: "Math",
     selectGrade: "कक्षा छान्नुहोस् - Maths",
     comingSoon: "छिट्टै आउँदैछ",
-    unit: "Unit",
-    labels: { lessons: "Lessons", quizzes: "Quizzes", flash: "Flashcards", ai: "AI" },
-    hint: "ट्याप गरेर खोल्नुहोस्।",
-    active: "Active",
+    active: "सिक्न तयार",
+    continueTitle: "अगाडि बढ्नुहोस्",
+    continueBody: "कुनै पनि भाग छान्नुहोस् र सिकाइ जारी राख्नुहोस्।",
+    exploreTitle: "अन्वेषण गर्नुहोस्",
+    exploreBody: "तलको कार्ड ट्याप गरेर सिक्न, अभ्यास गर्न, वा मद्दत लिन सुरु गर्नुहोस्।",
+    labels: {
+      lessons: "Lessons",
+      quizzes: "Quizzes",
+      flash: "Flashcards",
+      ai: "AI Helper",
+    },
+    cardDesc: {
+      lessons: "भिडियो हेरेर चरणबद्ध सिक्नुहोस्",
+      quizzes: "आफूले सिकेको कुरा जाँच्नुहोस्",
+      flash: "मुख्य कुरा छिटो दोहोर्याउनुहोस्",
+      ai: "जुनसुकै बेला प्रश्न सोध्नुहोस्",
+    },
+    hint: "कार्ड ट्याप गरेर खोल्नुहोस्।",
     intro: {
       title: "Quick tour",
       skip: "Skip",
       next: "Next",
       back: "Back",
       done: "Done",
+      tapHint: "अगाडि बढ्न हाइलाइट गरिएको कार्ड ट्याप गर्नुहोस्।",
       steps: [
-        { title: "Lessons", body: "भिडियो हेरेर विषय चरणबद्ध सिक्नुहोस्।" },
-        { title: "Quizzes", body: "सिकेपछि क्विज दिएर आफूलाई जाँच्नुहोस्।" },
-        { title: "Flashcards", body: "मुख्य कुरा छिटो दोहोर्याउनुहोस्।" },
-        { title: "AI Helper", body: "अड्किँदा AI बाट मद्दत लिनुहोस्।" },
+        { title: "Lessons", body: "बालमैत्री भिडियो हेरेर चरणबद्ध सिक्नुहोस्।" },
+        { title: "Quizzes", body: "क्विज दिएर आफूलाई जाँच्नुहोस्।" },
+        { title: "Flashcards", body: "फ्ल्यासकार्डले छिटो अभ्यास गर्नुहोस्।" },
+        { title: "AI Helper", body: "मद्दत चाहिँदा AI लाई सोध्नुहोस्।" },
       ],
     },
   },
@@ -77,21 +114,36 @@ const L10N = {
     math: "Math",
     selectGrade: "گریڈ منتخب کریں - Maths",
     comingSoon: "جلد آ رہا ہے",
-    unit: "Unit",
-    labels: { lessons: "Lessons", quizzes: "Quizzes", flash: "Flashcards", ai: "AI" },
-    hint: "کھولنے کے لیے آئیکن پر ٹیپ کریں۔",
-    active: "Active",
+    active: "سیکھنے کے لیے تیار",
+    continueTitle: "سیکھنا جاری رکھیں",
+    continueBody: "کوئی بھی حصہ منتخب کریں اور اپنی لرننگ جاری رکھیں۔",
+    exploreTitle: "Explore",
+    exploreBody: "نیچے موجود کارڈ پر ٹیپ کریں اور سیکھنا شروع کریں۔",
+    labels: {
+      lessons: "Lessons",
+      quizzes: "Quizzes",
+      flash: "Flashcards",
+      ai: "AI Helper",
+    },
+    cardDesc: {
+      lessons: "مزیدار اسباق مرحلہ وار دیکھیں",
+      quizzes: "جو سیکھا ہے اسے چیک کریں",
+      flash: "اہم چیزیں جلدی ریویو کریں",
+      ai: "کبھی بھی سوال پوچھیں",
+    },
+    hint: "کارڈ پر ٹیپ کریں۔",
     intro: {
       title: "Quick tour",
       skip: "Skip",
       next: "Next",
       back: "Back",
       done: "Done",
+      tapHint: "آگے بڑھنے کے لیے نمایاں کارڈ پر ٹیپ کریں۔",
       steps: [
         { title: "Lessons", body: "ویڈیوز دیکھ کر مرحلہ وار سیکھیں۔" },
-        { title: "Quizzes", body: "سیکھنے کے بعد کوئز سے خود کو چیک کریں۔" },
-        { title: "Flashcards", body: "اہم نکات تیزی سے دہرائیں۔" },
-        { title: "AI Helper", body: "پھنسی ہوئی جگہ پر AI سے مدد لیں۔" },
+        { title: "Quizzes", body: "کوئز سے اپنی یادداشت چیک کریں۔" },
+        { title: "Flashcards", body: "فلیش کارڈز سے تیزی سے پریکٹس کریں۔" },
+        { title: "AI Helper", body: "جب چاہیں AI سے مدد لیں۔" },
       ],
     },
   },
@@ -102,21 +154,36 @@ const L10N = {
     math: "Math",
     selectGrade: "গ্রেড নির্বাচন করুন - Maths",
     comingSoon: "শীঘ্রই আসছে",
-    unit: "Unit",
-    labels: { lessons: "Lessons", quizzes: "Quizzes", flash: "Flashcards", ai: "AI" },
-    hint: "খুলতে আইকনে ট্যাপ করুন।",
-    active: "Active",
+    active: "শেখার জন্য প্রস্তুত",
+    continueTitle: "শেখা চালিয়ে যাও",
+    continueBody: "যেকোনো সেকশন বেছে নিয়ে শেখা চালিয়ে যাও।",
+    exploreTitle: "Explore",
+    exploreBody: "নিচের কার্ডে ট্যাপ করে শেখা শুরু করো।",
+    labels: {
+      lessons: "Lessons",
+      quizzes: "Quizzes",
+      flash: "Flashcards",
+      ai: "AI Helper",
+    },
+    cardDesc: {
+      lessons: "ভিডিও দেখে ধাপে ধাপে শিখো",
+      quizzes: "তুমি কী শিখেছ যাচাই করো",
+      flash: "দ্রুত গুরুত্বপূর্ণ বিষয় রিভিউ করো",
+      ai: "যেকোনো সময় প্রশ্ন করো",
+    },
+    hint: "কার্ডে ট্যাপ করো।",
     intro: {
       title: "Quick tour",
       skip: "Skip",
       next: "Next",
       back: "Back",
       done: "Done",
+      tapHint: "এগোতে হাইলাইট করা কার্ডে ট্যাপ করো।",
       steps: [
-        { title: "Lessons", body: "ভিডিও দেখে ধাপে ধাপে শিখুন।" },
-        { title: "Quizzes", body: "শেখার পর কুইজ দিয়ে নিজেকে যাচাই করুন।" },
-        { title: "Flashcards", body: "মূল বিষয়গুলো দ্রুত রিভিউ করুন।" },
-        { title: "AI Helper", body: "আটকে গেলে AI সাহায্য নিন।" },
+        { title: "Lessons", body: "ভিডিও দেখে ধাপে ধাপে শেখো।" },
+        { title: "Quizzes", body: "কুইজ দিয়ে মনে আছে কিনা দেখো।" },
+        { title: "Flashcards", body: "ফ্ল্যাশকার্ড দিয়ে দ্রুত অনুশীলন করো।" },
+        { title: "AI Helper", body: "আটকে গেলে AI সাহায্য নাও।" },
       ],
     },
   },
@@ -127,20 +194,35 @@ const L10N = {
     math: "Math",
     selectGrade: "ग्रेड चुनें - Maths",
     comingSoon: "जल्द आ रहा है",
-    unit: "Unit",
-    labels: { lessons: "Lessons", quizzes: "Quizzes", flash: "Flashcards", ai: "AI" },
-    hint: "खोलने के लिए आइकन टैप करें।",
-    active: "Active",
+    active: "सीखने के लिए तैयार",
+    continueTitle: "सीखना जारी रखें",
+    continueBody: "कोई भी सेक्शन चुनें और अपनी learning journey जारी रखें।",
+    exploreTitle: "Explore",
+    exploreBody: "नीचे दिए गए कार्ड पर टैप करके सीखना शुरू करें।",
+    labels: {
+      lessons: "Lessons",
+      quizzes: "Quizzes",
+      flash: "Flashcards",
+      ai: "AI Helper",
+    },
+    cardDesc: {
+      lessons: "वीडियो देखकर स्टेप-बाय-स्टेप सीखें",
+      quizzes: "जो सीखा उसे जांचें",
+      flash: "मुख्य बातें जल्दी रिव्यू करें",
+      ai: "कभी भी सवाल पूछें",
+    },
+    hint: "कार्ड खोलने के लिए टैप करें।",
     intro: {
       title: "Quick tour",
       skip: "Skip",
       next: "Next",
       back: "Back",
       done: "Done",
+      tapHint: "आगे बढ़ने के लिए highlighted card टैप करें।",
       steps: [
         { title: "Lessons", body: "वीडियो देखकर स्टेप-बाय-स्टेप सीखें।" },
-        { title: "Quizzes", body: "सीखने के बाद क्विज़ से खुद को जांचें।" },
-        { title: "Flashcards", body: "मुख्य बातें जल्दी रिव्यू करें।" },
+        { title: "Quizzes", body: "क्विज़ से खुद को जांचें।" },
+        { title: "Flashcards", body: "फ्लैशकार्ड से जल्दी प्रैक्टिस करें।" },
         { title: "AI Helper", body: "अटकने पर AI से मदद लें।" },
       ],
     },
@@ -149,31 +231,32 @@ const L10N = {
 
 type Dict = typeof L10N[Lang extends keyof typeof L10N ? Lang : "English"];
 
-/* --------------------------------- Screen --------------------------------- */
+/* -------------------------------- constants -------------------------------- */
 
-const BLUE = "#2F6BFF";
-const BG = "#F2F7FF"; // softer, kid-friendly base
+const BLUE = "#4F7CFF";
+const BG = "#F4F8FF";
+const HOME_INTRO_KEY = "offklass_home_intro_done_v2";
 
-type NodeType = "lesson" | "quiz" | "flash" | "ai";
-type TreeNode = { id: string; type: NodeType; icon: keyof typeof Ionicons.glyphMap; text: string };
+type NavType = "lesson" | "quiz" | "flash" | "ai";
+type NavCard = {
+  id: string;
+  type: NavType;
+  title: string;
+  desc: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  tint: string;
+  bg: string;
+};
 
-const HOME_INTRO_KEY = "offklass_home_intro_done_v1";
-
-const UNIT1_NODES = (T: Dict): TreeNode[] => [
-  { id: "u1_lessons", type: "lesson", icon: "book-outline", text: T.labels.lessons },
-  { id: "u1_quiz", type: "quiz", icon: "help-circle-outline", text: T.labels.quizzes },
-  { id: "u1_flash", type: "flash", icon: "albums-outline", text: T.labels.flash },
-  { id: "u1_ai", type: "ai", icon: "sparkles-outline", text: T.labels.ai },
-];
+/* --------------------------------- screen --------------------------------- */
 
 export default function Home() {
   const insets = useSafeAreaInsets();
-  const { width, height } = Dimensions.get("window");
+  const { width } = Dimensions.get("window");
   const isTablet = width >= 900;
 
   const [user, setUser] = useState<OnboardingData | null>(null);
   const [snap, setSnap] = useState<any>(null);
-
   const [showIntro, setShowIntro] = useState(false);
   const [introStep, setIntroStep] = useState(0);
 
@@ -192,13 +275,7 @@ export default function Home() {
     const u = await loadJSON<OnboardingData | null>(ONBOARD_KEY, null);
     setUser(u);
 
-    if (!u) {
-      setSnap(null);
-      setShowIntro(false);
-      return;
-    }
-
-    const s: any = await getHomeSnapshot();
+    const s = await getHomeSnapshot();
     setSnap(s ?? null);
 
     const done = await loadJSON<boolean>(HOME_INTRO_KEY, false);
@@ -228,9 +305,49 @@ export default function Home() {
     return `Grade ${grade} ${T.math}${T.sep}${T.appName}`;
   }, [grade, T]);
 
-  const nodes = useMemo(() => UNIT1_NODES(T), [T]);
+  const cards: NavCard[] = useMemo(
+    () => [
+      {
+        id: "lessons",
+        type: "lesson",
+        title: T.labels.lessons,
+        desc: T.cardDesc.lessons,
+        icon: "book-outline",
+        tint: "#4F7CFF",
+        bg: "#EAF0FF",
+      },
+      {
+        id: "quizzes",
+        type: "quiz",
+        title: T.labels.quizzes,
+        desc: T.cardDesc.quizzes,
+        icon: "help-circle-outline",
+        tint: "#FF8A4C",
+        bg: "#FFF1E8",
+      },
+      {
+        id: "flashcards",
+        type: "flash",
+        title: T.labels.flash,
+        desc: T.cardDesc.flash,
+        icon: "albums-outline",
+        tint: "#22C55E",
+        bg: "#EAFBF0",
+      },
+      {
+        id: "ai",
+        type: "ai",
+        title: T.labels.ai,
+        desc: T.cardDesc.ai,
+        icon: "sparkles-outline",
+        tint: "#A855F7",
+        bg: "#F4EAFE",
+      },
+    ],
+    [T]
+  );
 
-  const goTo = useCallback((type: NodeType) => {
+  const goTo = useCallback((type: NavType) => {
     if (type === "lesson") router.push("/tabs/lessons");
     if (type === "quiz") router.push("/tabs/quizzes");
     if (type === "flash") router.push("/tabs/flashcards");
@@ -242,57 +359,41 @@ export default function Home() {
     await saveJSON(HOME_INTRO_KEY, true);
   }, []);
 
-  const skipIntro = useCallback(() => {
-    finishIntro();
-  }, [finishIntro]);
-
   const nextIntro = useCallback(() => {
-    setIntroStep((s) => Math.min(s + 1, nodes.length - 1));
-  }, [nodes.length]);
+    setIntroStep((s) => Math.min(s + 1, cards.length - 1));
+  }, [cards.length]);
 
   const backIntro = useCallback(() => {
     setIntroStep((s) => Math.max(s - 1, 0));
   }, []);
 
-  const isNodeEnabled = useCallback(
-    (index: number) => {
-      if (!showIntro) return true;
-      return index === introStep;
-    },
-    [showIntro, introStep]
-  );
-
-  const onNodePress = useCallback(
+  const onCardPress = useCallback(
     async (index: number) => {
-      const node = nodes[index];
       if (showIntro && index !== introStep) return;
 
-      goTo(node.type);
+      const card = cards[index];
+      goTo(card.type);
 
       if (showIntro) {
-        if (index >= nodes.length - 1) {
+        if (index === cards.length - 1) {
           await finishIntro();
         } else {
           setIntroStep(index + 1);
         }
       }
     },
-    [nodes, goTo, showIntro, introStep, finishIntro]
+    [showIntro, introStep, cards, goTo, finishIntro]
   );
-
-  const tight = height < 740;
-  const bodyPadTop = tight ? 10 : 14;
 
   const introCopy = T.intro.steps[introStep] ?? T.intro.steps[0];
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      {/* Top Bar */}
       <View style={[styles.topBar, { paddingTop: Math.max(10, insets.top * 0.2) }]}>
         <View style={styles.topLeft}>
-          <Pressable style={styles.topIconBtn} hitSlop={10} onPress={() => {}}>
-            <Ionicons name="layers-outline" size={isTablet ? 26 : 22} color="#fff" />
-          </Pressable>
+          <View style={styles.logoBubble}>
+            <Ionicons name="school-outline" size={20} color="#fff" />
+          </View>
 
           <View style={styles.topTitleWrap}>
             <Text style={[styles.topTitle, rtl]} numberOfLines={1}>
@@ -306,55 +407,89 @@ export default function Home() {
 
         <View style={styles.topRight}>
           <Pill icon="flash-outline" text={`${snap?.streak ?? 0}`} />
-          <Pill icon="ribbon-outline" text={`Level ${snap?.level ?? 1}`} />
+          <Pill icon="star-outline" text={`Lvl ${snap?.level ?? 1}`} />
         </View>
       </View>
 
-      {/* Body */}
-      <View style={[styles.main, { paddingHorizontal: isTablet ? 28 : 16, paddingTop: bodyPadTop }]}>
-        {/* ✅ Kid-friendly decorative background (Home only) */}
+      <View style={styles.main}>
         <PlayfulBackground />
 
-        {/* Unit 1 */}
-        <View style={styles.unitBlock}>
-          <View style={styles.unitHeader}>
-            <Text style={styles.unitTitle}>
-              {T.unit} 1
-            </Text>
-            <View style={styles.unitTag}>
-              <Ionicons name="checkmark-circle-outline" size={14} color={BLUE} />
-              <Text style={styles.unitTagText}>{T.active}</Text>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingHorizontal: isTablet ? 28 : 16, paddingBottom: 28 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.heroCard}>
+            <View style={styles.heroTextWrap}>
+              <View style={styles.heroTag}>
+                <Ionicons name="sparkles" size={14} color={BLUE} />
+                <Text style={styles.heroTagText}>{T.active}</Text>
+              </View>
+
+              <Text style={[styles.heroTitle, rtl]}>
+                {T.continueTitle}
+              </Text>
+              <Text style={[styles.heroBody, rtl]}>
+                {T.continueBody}
+              </Text>
+            </View>
+
+            <View style={styles.heroArt}>
+              <View style={styles.heroCircleBig}>
+                <Ionicons name="planet-outline" size={34} color="#4F7CFF" />
+              </View>
+              <View style={styles.heroCircleSmall}>
+                <Ionicons name="sparkles" size={18} color="#FF8A4C" />
+              </View>
+              <View style={styles.heroCircleMini}>
+                <Ionicons name="heart" size={14} color="#A855F7" />
+              </View>
             </View>
           </View>
 
-          <View style={styles.treeRow}>
-            {nodes.map((n, idx) => {
-              const enabled = isNodeEnabled(idx);
-              const isFocused = showIntro && idx === introStep;
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, rtl]}>{T.exploreTitle}</Text>
+            <Text style={[styles.sectionBody, rtl]}>{T.exploreBody}</Text>
+          </View>
+
+          <View style={styles.cardGrid}>
+            {cards.map((card, index) => {
+              const locked = showIntro && index !== introStep;
+              const focused = showIntro && index === introStep;
 
               return (
-                <React.Fragment key={n.id}>
-                  <Pressable
-                    onPress={() => onNodePress(idx)}
-                    disabled={!enabled}
-                    style={({ pressed }) => [
-                      styles.nodeWrap,
-                      !enabled && { opacity: 0.35 },
-                      pressed && enabled && { transform: [{ scale: 0.98 }], opacity: 0.94 },
-                    ]}
-                  >
-                    <View style={[styles.nodeCircle, isFocused && styles.nodeCircleFocus]}>
-                      {isFocused && <View style={styles.focusRing} />}
-                      <Ionicons name={n.icon} size={26} color="#fff" />
-                    </View>
+                <Pressable
+                  key={card.id}
+                  disabled={locked}
+                  onPress={() => onCardPress(index)}
+                  style={({ pressed }) => [
+                    styles.navCard,
+                    { backgroundColor: card.bg, opacity: locked ? 0.35 : 1 },
+                    focused && styles.navCardFocused,
+                    pressed && !locked && { transform: [{ scale: 0.98 }] },
+                  ]}
+                >
+                  {focused && <View style={[styles.cardFocusRing, { borderColor: card.tint }]} />}
 
-                    <Text style={styles.nodeText} numberOfLines={1}>
-                      {n.text}
-                    </Text>
-                  </Pressable>
+                  <View style={[styles.cardIconWrap, { backgroundColor: card.tint }]}>
+                    <Ionicons name={card.icon} size={28} color="#fff" />
+                  </View>
 
-                  {idx !== nodes.length - 1 && <View style={styles.connector} />}
-                </React.Fragment>
+                  <Text style={[styles.cardTitle, rtl]} numberOfLines={1}>
+                    {card.title}
+                  </Text>
+
+                  <Text style={[styles.cardDesc, rtl]} numberOfLines={2}>
+                    {card.desc}
+                  </Text>
+
+                  <View style={styles.cardArrowRow}>
+                    <Text style={[styles.cardOpenText, { color: card.tint }]}>Open</Text>
+                    <Ionicons name="arrow-forward" size={16} color={card.tint} />
+                  </View>
+                </Pressable>
               );
             })}
           </View>
@@ -363,38 +498,15 @@ export default function Home() {
             <Ionicons name="information-circle-outline" size={16} color="rgba(17,24,39,0.55)" />
             <Text style={styles.helperText}>{T.hint}</Text>
           </View>
-        </View>
-
-        {/* Locked units 2–5 */}
-        <View style={styles.lockedWrap}>
-          {[2, 3, 4, 5].map((u) => (
-            <View key={u} style={styles.lockedUnit}>
-              <View style={styles.lockedLeft}>
-                <View style={styles.lockIcon}>
-                  <Ionicons name="lock-closed-outline" size={16} color="rgba(17,24,39,0.6)" />
-                </View>
-                <Text style={styles.lockedTitle}>
-                  {T.unit} {u}
-                </Text>
-              </View>
-
-              <View style={styles.comingSoonPill}>
-                <Text style={styles.comingSoonText}>{T.comingSoon}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        <View style={{ flex: 1 }} />
+        </ScrollView>
       </View>
 
-      {/* Intro Coach Bubble Overlay */}
       <Modal visible={showIntro} transparent animationType="fade">
         <View style={styles.introOverlay}>
           <View style={styles.introCard}>
             <View style={styles.introHeader}>
               <Text style={styles.introTitle}>{T.intro.title}</Text>
-              <Pressable onPress={skipIntro} hitSlop={10}>
+              <Pressable onPress={finishIntro} hitSlop={10}>
                 <Text style={styles.introSkip}>{T.intro.skip}</Text>
               </Pressable>
             </View>
@@ -404,7 +516,7 @@ export default function Home() {
 
             <View style={styles.introHintRow}>
               <Ionicons name="hand-left-outline" size={16} color="rgba(17,24,39,0.70)" />
-              <Text style={styles.introHintText}>Tap the highlighted button to continue.</Text>
+              <Text style={styles.introHintText}>{T.intro.tapHint}</Text>
             </View>
 
             <View style={styles.introBtns}>
@@ -420,7 +532,7 @@ export default function Home() {
                 <Text style={styles.introBtnGhostText}>{T.intro.back}</Text>
               </Pressable>
 
-              {introStep < nodes.length - 1 ? (
+              {introStep < cards.length - 1 ? (
                 <Pressable
                   onPress={nextIntro}
                   style={({ pressed }) => [styles.introBtnPrimary, pressed && { opacity: 0.92 }]}
@@ -443,50 +555,43 @@ export default function Home() {
   );
 }
 
-/* ----------------------------- Kid Background ----------------------------- */
-/**
- * Simple playful background using soft blobs + sparkles
- * - No extra libraries
- * - pointerEvents none so it won't block taps
- */
+/* ----------------------------- background -------------------------------- */
+
 function PlayfulBackground() {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {/* soft blobs */}
       <View style={[styles.bgBlob, styles.bgBlobPink]} />
       <View style={[styles.bgBlob, styles.bgBlobYellow]} />
       <View style={[styles.bgBlob, styles.bgBlobGreen]} />
       <View style={[styles.bgBlob, styles.bgBlobBlue]} />
 
-      {/* sparkles / dots */}
-      <View style={[styles.bgDot, { top: 28, left: 18, opacity: 0.55 }]} />
-      <View style={[styles.bgDot, { top: 90, right: 22, opacity: 0.45 }]} />
-      <View style={[styles.bgDot, { bottom: 160, left: 26, opacity: 0.50 }]} />
-      <View style={[styles.bgDot, { bottom: 90, right: 30, opacity: 0.40 }]} />
+      <View style={[styles.cloud, { top: 110, left: 20 }]} />
+      <View style={[styles.cloud, { top: 230, right: 18, transform: [{ scale: 0.82 }] }]} />
+      <View style={[styles.cloud, { bottom: 120, left: 40, transform: [{ scale: 0.75 }] }]} />
 
       <Ionicons
-        name="sparkles"
-        size={18}
+        name="star"
+        size={14}
         color="rgba(255, 196, 0, 0.55)"
-        style={[styles.bgIcon, { top: 54, right: 44 }]}
-      />
-      <Ionicons
-        name="sparkles"
-        size={16}
-        color="rgba(34, 197, 94, 0.40)"
-        style={[styles.bgIcon, { bottom: 210, left: 40 }]}
+        style={[styles.bgIcon, { top: 70, right: 46 }]}
       />
       <Ionicons
         name="heart"
-        size={16}
-        color="rgba(255, 99, 132, 0.35)"
-        style={[styles.bgIcon, { top: 190, left: 26 }]}
+        size={14}
+        color="rgba(255, 99, 132, 0.36)"
+        style={[styles.bgIcon, { top: 200, left: 34 }]}
+      />
+      <Ionicons
+        name="sparkles"
+        size={17}
+        color="rgba(168, 85, 247, 0.42)"
+        style={[styles.bgIcon, { bottom: 180, right: 44 }]}
       />
     </View>
   );
 }
 
-/* ----------------------------- Small Components ---------------------------- */
+/* ----------------------------- small components ---------------------------- */
 
 function Pill({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
   return (
@@ -499,7 +604,7 @@ function Pill({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: stri
   );
 }
 
-/* --------------------------------- Styles --------------------------------- */
+/* --------------------------------- styles --------------------------------- */
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
@@ -507,17 +612,23 @@ const styles = StyleSheet.create({
   topBar: {
     backgroundColor: BLUE,
     paddingHorizontal: 14,
-    paddingBottom: 10,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
 
-  topLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
-  topIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+  topLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+
+  logoBubble: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
@@ -525,9 +636,20 @@ const styles = StyleSheet.create({
 
   topTitleWrap: { flex: 1 },
   topTitle: { color: "#fff", fontWeight: "900", fontSize: 16 },
-  topSub: { color: "rgba(255,255,255,0.85)", fontWeight: "700", fontSize: 12, marginTop: 2 },
+  topSub: {
+    color: "rgba(255,255,255,0.88)",
+    fontWeight: "700",
+    fontSize: 12,
+    marginTop: 2,
+  },
 
-  topRight: { flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 10 },
+  topRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginLeft: 10,
+  },
+
   pill: {
     flexDirection: "row",
     alignItems: "center",
@@ -539,11 +661,215 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.20)",
   },
-  pillText: { color: "#fff", fontWeight: "800", fontSize: 12, maxWidth: 120 },
+
+  pillText: {
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 12,
+    maxWidth: 120,
+  },
 
   main: { flex: 1, backgroundColor: BG },
+  scrollContent: { paddingTop: 14 },
 
-  /* ------------------ playful background styles (HOME ONLY) ------------------ */
+  heroCard: {
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderRadius: 26,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+  },
+
+  heroTextWrap: {
+    flex: 1,
+    paddingRight: 12,
+  },
+
+  heroTag: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: "rgba(79,124,255,0.10)",
+    marginBottom: 10,
+  },
+
+  heroTagText: {
+    color: BLUE,
+    fontWeight: "900",
+    fontSize: 12,
+  },
+
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#111827",
+  },
+
+  heroBody: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "700",
+    color: "rgba(17,24,39,0.72)",
+  },
+
+  heroArt: {
+    width: 100,
+    height: 100,
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  heroCircleBig: {
+    width: 76,
+    height: 76,
+    borderRadius: 999,
+    backgroundColor: "#EAF0FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  heroCircleSmall: {
+    position: "absolute",
+    top: 6,
+    right: 4,
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: "#FFF1E8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  heroCircleMini: {
+    position: "absolute",
+    bottom: 10,
+    left: 4,
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: "#F4EAFE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  sectionHeader: {
+    marginTop: 20,
+    marginBottom: 12,
+  },
+
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#111827",
+  },
+
+  sectionBody: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "rgba(17,24,39,0.65)",
+    fontWeight: "700",
+  },
+
+  cardGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  navCard: {
+    width: "48%",
+    minHeight: 170,
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+    position: "relative",
+    overflow: "hidden",
+  },
+
+  navCardFocused: {
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+
+  cardFocusRing: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    right: 6,
+    bottom: 6,
+    borderRadius: 20,
+    borderWidth: 3,
+  },
+
+  cardIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  cardTitle: {
+    marginTop: 14,
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#111827",
+  },
+
+  cardDesc: {
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+    color: "rgba(17,24,39,0.70)",
+    flex: 1,
+  },
+
+  cardArrowRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  cardOpenText: {
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
+  helperTextRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 16,
+    alignSelf: "center",
+  },
+
+  helperText: {
+    color: "rgba(17,24,39,0.55)",
+    fontWeight: "800",
+    fontSize: 12,
+  },
 
   bgBlob: {
     position: "absolute",
@@ -551,181 +877,48 @@ const styles = StyleSheet.create({
     height: 220,
     borderRadius: 999,
   },
+
   bgBlobPink: {
     top: -60,
     left: -70,
-    backgroundColor: "rgba(255, 99, 132, 0.14)",
+    backgroundColor: "rgba(255, 99, 132, 0.13)",
   },
+
   bgBlobYellow: {
-    top: 30,
-    right: -80,
-    backgroundColor: "rgba(255, 196, 0, 0.14)",
+    top: 80,
+    right: -90,
     width: 260,
     height: 260,
+    backgroundColor: "rgba(255, 196, 0, 0.12)",
   },
+
   bgBlobGreen: {
-    bottom: 120,
-    left: -90,
-    backgroundColor: "rgba(34, 197, 94, 0.12)",
-    width: 260,
-    height: 260,
+    bottom: 110,
+    left: -80,
+    width: 250,
+    height: 250,
+    backgroundColor: "rgba(34, 197, 94, 0.11)",
   },
+
   bgBlobBlue: {
     bottom: -80,
     right: -90,
-    backgroundColor: "rgba(47, 107, 255, 0.10)",
-    width: 260,
-    height: 260,
+    width: 270,
+    height: 270,
+    backgroundColor: "rgba(79,124,255,0.10)",
   },
-  bgDot: {
+
+  cloud: {
     position: "absolute",
-    width: 10,
-    height: 10,
-    borderRadius: 99,
-    backgroundColor: "rgba(47, 107, 255, 0.25)",
+    width: 78,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.65)",
   },
+
   bgIcon: {
     position: "absolute",
   },
-
-  /* ------------------------------ content card ------------------------------ */
-
-  unitBlock: {
-    backgroundColor: "rgba(255,255,255,0.82)",
-    borderRadius: 22,
-    paddingVertical: 22,
-    paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 4,
-  },
-
-  unitHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  unitTitle: { fontWeight: "900", fontSize: 16, color: "#111827" },
-
-  unitTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    height: 30,
-    borderRadius: 999,
-    backgroundColor: "rgba(47,107,255,0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(47,107,255,0.14)",
-  },
-  unitTagText: { color: BLUE, fontWeight: "900", fontSize: 12 },
-
-  treeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 10,
-  },
-
-  nodeWrap: { alignItems: "center", width: 96 },
-
-  nodeCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 999,
-    backgroundColor: "rgba(47,107,255,0.95)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.85)",
-    shadowColor: "#2F6BFF",
-    shadowOpacity: 0.22,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
-    position: "relative",
-  },
-
-  nodeCircleFocus: {
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  focusRing: {
-    position: "absolute",
-    width: 86,
-    height: 86,
-    borderRadius: 999,
-    borderWidth: 3,
-    borderColor: "rgba(47,107,255,0.35)",
-    backgroundColor: "rgba(47,107,255,0.08)",
-  },
-
-  nodeText: {
-    marginTop: 10,
-    fontWeight: "900",
-    fontSize: 14,
-    color: "rgba(17,24,39,0.88)",
-  },
-
-  connector: {
-    width: 26,
-    height: 4,
-    backgroundColor: "rgba(17,24,39,0.15)",
-    borderRadius: 999,
-    marginHorizontal: 10,
-  },
-
-  helperTextRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 14,
-    alignSelf: "center",
-  },
-  helperText: { color: "rgba(17,24,39,0.55)", fontWeight: "800", fontSize: 12 },
-
-  lockedWrap: { marginTop: 14, gap: 10 },
-
-  lockedUnit: {
-    backgroundColor: "rgba(255,255,255,0.70)",
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  lockedLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  lockIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: "rgba(17,24,39,0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  lockedTitle: { fontWeight: "900", color: "#111827", fontSize: 14 },
-
-  comingSoonPill: {
-    height: 30,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    backgroundColor: "rgba(17,24,39,0.10)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  comingSoonText: { color: "rgba(17,24,39,0.70)", fontWeight: "900", fontSize: 12 },
-
-  /* --------------------------- Intro overlay styles -------------------------- */
 
   introOverlay: {
     flex: 1,
@@ -750,17 +943,58 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
-  introHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  introTitle: { fontWeight: "900", fontSize: 14, color: "#111827" },
-  introSkip: { fontWeight: "900", fontSize: 13, color: BLUE },
+  introHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
 
-  introStepTitle: { marginTop: 10, fontWeight: "900", fontSize: 16, color: "#111827" },
-  introBody: { marginTop: 6, fontWeight: "700", fontSize: 13, color: "rgba(17,24,39,0.78)", lineHeight: 18 },
+  introTitle: {
+    fontWeight: "900",
+    fontSize: 14,
+    color: "#111827",
+  },
 
-  introHintRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 8 },
-  introHintText: { fontWeight: "800", fontSize: 12, color: "rgba(17,24,39,0.70)" },
+  introSkip: {
+    fontWeight: "900",
+    fontSize: 13,
+    color: BLUE,
+  },
 
-  introBtns: { marginTop: 14, flexDirection: "row", justifyContent: "space-between", gap: 10 },
+  introStepTitle: {
+    marginTop: 10,
+    fontWeight: "900",
+    fontSize: 16,
+    color: "#111827",
+  },
+
+  introBody: {
+    marginTop: 6,
+    fontWeight: "700",
+    fontSize: 13,
+    color: "rgba(17,24,39,0.78)",
+    lineHeight: 18,
+  },
+
+  introHintRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  introHintText: {
+    fontWeight: "800",
+    fontSize: 12,
+    color: "rgba(17,24,39,0.70)",
+  },
+
+  introBtns: {
+    marginTop: 14,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+  },
 
   introBtnGhost: {
     flex: 1,
@@ -770,7 +1004,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  introBtnGhostText: { fontWeight: "900", color: "rgba(17,24,39,0.80)" },
+
+  introBtnGhostText: {
+    fontWeight: "900",
+    color: "rgba(17,24,39,0.80)",
+  },
 
   introBtnPrimary: {
     flex: 1,
@@ -780,5 +1018,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  introBtnPrimaryText: { fontWeight: "900", color: "#fff" },
+
+  introBtnPrimaryText: {
+    fontWeight: "900",
+    color: "#fff",
+  },
 });

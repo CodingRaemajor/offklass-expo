@@ -3,14 +3,9 @@
 export const m1Transcript = `
 Welcome to Understanding Ones and Tens.
 
-Today we are learning place value basics in two-digit numbers.
+Today we are learning place value basics in numbers.
 
 Place value tells us what each digit means in a number.
-
-In every two-digit number:
-
-• The digit on the RIGHT is the ONES place.
-• The digit on the LEFT is the TENS place.
 
 ----------------------------------
 ONES PLACE
@@ -75,20 +70,80 @@ WRITING NUMBERS USING TENS AND ONES
 EXPANDED FORM
 ----------------------------------
 
-Expanded form shows a number as the sum of its tens and ones.
+Expanded form shows a number as the sum of its place values.
 
 45 = 40 + 5  
 73 = 70 + 3  
 68 = 60 + 8  
 84 = 80 + 4  
 
+Expanded form helps us clearly see the value of each digit.
+
+----------------------------------
+COMPARING TWO-DIGIT NUMBERS
+----------------------------------
+
+We compare numbers to see which number is greater or smaller.
+
+When comparing two-digit numbers:
+
+1. First compare the TENS digits.
+2. If the tens digits are the same, compare the ONES digits.
+
+Example:
+
+47 and 32
+
+Compare tens:
+4 tens is greater than 3 tens.
+
+So:
+47 > 32
+
+Example:
+
+56 and 58
+
+Both have 5 tens.
+
+Now compare ones:
+6 ones is less than 8 ones.
+
+So:
+56 < 58
+
+----------------------------------
+INTRODUCTION TO HUNDREDS
+----------------------------------
+
+Numbers can also have a hundreds place.
+
+In three-digit numbers:
+
+• The right digit is the ONES place.
+• The middle digit is the TENS place.
+• The left digit is the HUNDREDS place.
+
+Example:
+
+325
+
+3 is in the hundreds place → 3 hundreds = 300  
+2 is in the tens place → 2 tens = 20  
+5 is in the ones place → 5 ones = 5  
+
+So:
+
+325 = 300 + 20 + 5
+
 ----------------------------------
 REMEMBER
 ----------------------------------
 
-• The tens digit tells how many groups of ten.
-• The ones digit tells how many single units.
+• The ones digit shows single units.
+• The tens digit shows groups of ten.
+• The hundreds digit shows groups of one hundred.
 • The value of a digit depends on its place.
 
-Understanding ones and tens helps us read, write, and break apart two-digit numbers.
+Understanding place value helps us read numbers, compare numbers, and break numbers into parts.
 `;
