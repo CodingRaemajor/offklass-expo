@@ -3,24 +3,20 @@
 export const m4Transcript = `
 Welcome to Multiplying Two-Digit Numbers.
 
-Today we will learn how to multiply larger numbers using place value.
-
-Multiplying two-digit numbers becomes easier when we break numbers into tens and ones.
+We multiply larger numbers by using place value and breaking numbers into tens and ones.
 
 ----------------------------------
-MULTIPLICATION BY 2-DIGIT NUMBERS
+MULTIPLYING BY A 2-DIGIT NUMBER
 ----------------------------------
 
-Two-digit numbers have a tens place and a ones place.
+Two-digit numbers have tens and ones.
 
 Example:
 
 23
 
-2 is in the tens place → 20  
-3 is in the ones place → 3  
-
-When multiplying two-digit numbers, we use place value to break numbers apart.
+2 tens = 20  
+3 ones = 3  
 
 Example:
 
@@ -35,7 +31,7 @@ Multiply each part.
 20 × 4 = 80  
 3 × 4 = 12  
 
-Add the results.
+Add the results:
 
 80 + 12 = 92
 
@@ -44,10 +40,10 @@ So:
 23 × 4 = 92
 
 ----------------------------------
-MULTIPLY BY 10s
+MULTIPLYING BY TENS
 ----------------------------------
 
-When multiplying by a number that ends in zero, we use place value.
+When multiplying numbers ending in zero, we use place value.
 
 Example:
 
@@ -55,45 +51,37 @@ Example:
 
 30 means 3 tens.
 
-3 tens × 4 = 12 tens
-
-12 tens = 120
-
-So:
-
-30 × 4 = 120
+3 tens × 4 = 12 tens = 120
 
 Another example:
 
 40 × 5
 
-4 tens × 5 = 20 tens
-
-20 tens = 200
+4 tens × 5 = 20 tens = 200
 
 ----------------------------------
-MULTIPLY 2-DIGIT NUMBERS WITH AREA MODELS
+AREA MODEL FOR MULTIPLICATION
 ----------------------------------
 
-Area models help us visualize multiplication.
+Area models help visualize multiplication.
 
 Example:
 
 23 × 15
 
-Break the numbers into tens and ones.
+Break numbers into tens and ones.
 
 23 = 20 + 3  
 15 = 10 + 5  
 
-Now multiply each part.
+Multiply each part.
 
 20 × 10 = 200  
 20 × 5 = 100  
 3 × 10 = 30  
 3 × 5 = 15  
 
-Now add all the parts.
+Add the parts:
 
 200 + 100 + 30 + 15 = 345
 
@@ -101,35 +89,27 @@ So:
 
 23 × 15 = 345
 
-Area models help us see how place value works in multiplication.
-
 ----------------------------------
-ESTIMATING PRODUCTS (2-DIGIT NUMBERS)
+ESTIMATING PRODUCTS
 ----------------------------------
 
-Estimating helps us find an answer that is close to the exact result.
-
-We round numbers to make multiplication easier.
+Estimating gives an answer close to the real result.
 
 Example:
 
 48 × 21
 
-Round the numbers.
+Round numbers.
 
 48 ≈ 50  
 21 ≈ 20  
 
-Now multiply.
-
 50 × 20 = 1000
 
-So the product will be close to 1000.
-
-Estimation helps check if our answers are reasonable.
+So the product is about 1000.
 
 ----------------------------------
-MULTIPLY 2-DIGIT NUMBERS WITH PARTIAL PRODUCTS
+PARTIAL PRODUCTS
 ----------------------------------
 
 Partial products break multiplication into smaller steps.
@@ -138,19 +118,14 @@ Example:
 
 24 × 13
 
-Break 13 into tens and ones.
-
 13 = 10 + 3
 
-Step 1: Multiply by the ones.
+Multiply each part.
 
-24 × 3 = 72
+24 × 3 = 72  
+24 × 10 = 240  
 
-Step 2: Multiply by the tens.
-
-24 × 10 = 240
-
-Step 3: Add the partial products.
+Add the results:
 
 240 + 72 = 312
 
@@ -158,17 +133,13 @@ So:
 
 24 × 13 = 312
 
-Partial products help solve larger multiplication problems step by step.
-
 ----------------------------------
-REMEMBER
+KEY IDEAS
 ----------------------------------
 
-• Two-digit numbers have tens and ones.
-• Multiplication uses place value to break numbers apart.
-• Area models help us see how multiplication works.
-• Estimation helps us check our answers.
-• Partial products make big problems easier to solve.
-
-Understanding these methods helps us multiply larger numbers with confidence.
+• Two-digit numbers have tens and ones.  
+• Break numbers using place value.  
+• Area models show how multiplication works.  
+• Estimation checks if answers make sense.  
+• Partial products solve larger problems step by step.
 `;

@@ -10,6 +10,7 @@ import {
   Easing,
   useWindowDimensions,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,10 +19,17 @@ import { LinearGradient } from "expo-linear-gradient";
 import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
 import { AskAIButton } from "../../components/AskAIButton";
 import { NextStepFooter } from "../../components/NextStepFooter";
+import { generateFlashcardsFromTranscript } from "../../lib/ai.local";
+import { LESSON_INFO, getLessonInfoByUnit } from "../../lib/lessonTranscripts";
 
-/* --------------------------------- Data ---------------------------------- */
+/* --------------------------------- Types --------------------------------- */
 
-type Card = { id: string; front: string; back: string; topic?: string };
+type Card = {
+  id: string;
+  front: string;
+  back: string;
+  topic?: string;
+};
 
 const SEED: Card[] = [
   {
@@ -86,7 +94,7 @@ const SEED: Card[] = [
   },
 ];
 
-/* -------------------------------- i18n bits ------------------------------- */
+/* -------------------------------- i18n -------------------------------- */
 
 const LANGS = ["English", "नेपाली", "اردو", "বাংলা", "हिन्दी"] as const;
 type Lang = (typeof LANGS)[number];
@@ -113,8 +121,6 @@ const L10N: Record<
     finishedMsg: string;
     practiceModeLabel: string;
     pointsLbl: string;
-
-    // game-y
     levelComplete: string;
     streak: string;
     rewardsTitle: string;
@@ -127,16 +133,18 @@ const L10N: Record<
     rankB: string;
     rankC: string;
     rankD: string;
-
-    // new UI hints
     tapToFlipHint: string;
     deckLabel: string;
     practiceLabel: string;
+    unitTitle: string;
+    generateDeck: string;
+    generatingDeck: string;
+    aiFailed: string;
   }
 > = {
   English: {
-    title: "🧠 Place Value Flashcards!",
-    subtitle: "Flip the card, earn points, build your streak!",
+    title: "🧠 AI Flashcards!",
+    subtitle: "Pick a unit, generate cards, flip the card, and build your streak!",
     questionLbl: "Question",
     answerLbl: "Answer",
     topicLbl: "Topic",
@@ -151,10 +159,9 @@ const L10N: Record<
     completed: "Completed",
     reset: "Reset",
     finishedTitle: "Great job!",
-    finishedMsg: "You’ve completed the flashcards.",
+    finishedMsg: "You've completed the flashcards.",
     practiceModeLabel: "Practice cards marked 'Needs Practice'",
     pointsLbl: "Points",
-
     levelComplete: "Deck Complete!",
     streak: "Streak",
     rewardsTitle: "Rewards",
@@ -167,14 +174,17 @@ const L10N: Record<
     rankB: "Pro",
     rankC: "Rising Star",
     rankD: "Keep Going",
-
-    tapToFlipHint: "Tip: Tap “Show Answer” to flip",
+    tapToFlipHint: 'Tip: Tap "Show Answer" to flip',
     deckLabel: "Deck",
     practiceLabel: "Practice",
+    unitTitle: "Choose Unit",
+    generateDeck: "Generate Flashcards",
+    generatingDeck: "Generating...",
+    aiFailed: "AI flashcard generation failed. Showing backup cards.",
   },
   नेपाली: {
-    title: "🧠 स्थानीय मूल्य फ्ल्यासकार्ड!",
-    subtitle: "कार्ड फ्लिप गर्नुहोस्, अंक कमाउनुहोस्, स्ट्रिक बनाउनुहोस्!",
+    title: "🧠 AI फ्ल्यासकार्ड!",
+    subtitle: "युनिट छान्नुहोस्, कार्ड बनाउनुहोस्, फ्लिप गर्नुहोस् र स्ट्रिक बनाउनुहोस्!",
     questionLbl: "प्रश्न",
     answerLbl: "उत्तर",
     topicLbl: "विषय",
@@ -192,7 +202,6 @@ const L10N: Record<
     finishedMsg: "तपाईंले फ्ल्यासकार्ड पूरा गर्नुभयो।",
     practiceModeLabel: "'अभ्यास चाहियो' कार्डहरू मात्र अभ्यास गर्नुहोस्",
     pointsLbl: "अंक",
-
     levelComplete: "डेक पूरा!",
     streak: "स्ट्रिक",
     rewardsTitle: "इनाम",
@@ -205,14 +214,17 @@ const L10N: Record<
     rankB: "प्रो",
     rankC: "राइजिङ स्टार",
     rankD: "जारी राख्नुहोस्",
-
-    tapToFlipHint: "टिप: “उत्तर देखाउनुहोस्” ट्याप गरेर फ्लिप गर्नुहोस्",
+    tapToFlipHint: 'टिप: "उत्तर देखाउनुहोस्" ट्याप गरेर फ्लिप गर्नुहोस्',
     deckLabel: "डेक",
     practiceLabel: "अभ्यास",
+    unitTitle: "युनिट छान्नुहोस्",
+    generateDeck: "फ्ल्यासकार्ड बनाउनुहोस्",
+    generatingDeck: "बनाइँदैछ...",
+    aiFailed: "AI फ्ल्यासकार्ड बनाउन सकेन। ब्याकअप कार्ड देखाइँदैछ।",
   },
   اردو: {
-    title: "🧠 مقامی قدر فلیش کارڈز!",
-    subtitle: "کارڈ پلٹیں، پوائنٹس بنائیں، اسٹریک بڑھائیں!",
+    title: "🧠 AI فلیش کارڈز!",
+    subtitle: "یونٹ منتخب کریں، کارڈز بنائیں، پلٹیں اور اسٹریک بڑھائیں!",
     questionLbl: "سوال",
     answerLbl: "جواب",
     topicLbl: "موضوع",
@@ -230,7 +242,6 @@ const L10N: Record<
     finishedMsg: "آپ نے فلیش کارڈز مکمل کر لیے!",
     practiceModeLabel: "صرف 'مزید مشق' والے کارڈز کی مشق کریں",
     pointsLbl: "پوائنٹس",
-
     levelComplete: "ڈیک مکمل!",
     streak: "اسٹریک",
     rewardsTitle: "انعامات",
@@ -243,14 +254,17 @@ const L10N: Record<
     rankB: "پرو",
     rankC: "رائزنگ اسٹار",
     rankD: "جاری رکھیں",
-
-    tapToFlipHint: "ٹِپ: “جواب دکھائیں” پر ٹیپ کر کے پلٹیں",
+    tapToFlipHint: 'ٹِپ: "جواب دکھائیں" پر ٹیپ کر کے پلٹیں',
     deckLabel: "ڈیک",
     practiceLabel: "پریکٹس",
+    unitTitle: "یونٹ منتخب کریں",
+    generateDeck: "فلیش کارڈز بنائیں",
+    generatingDeck: "بن رہے ہیں...",
+    aiFailed: "AI فلیش کارڈز نہیں بنا سکا۔ بیک اپ کارڈز دکھائے جا رہے ہیں۔",
   },
   বাংলা: {
-    title: "🧠 স্থানীয় মান ফ্ল্যাশকার্ড!",
-    subtitle: "কার্ড ফ্লিপ করুন, পয়েন্ট পান, স্ট্রিক বাড়ান!",
+    title: "🧠 AI ফ্ল্যাশকার্ড!",
+    subtitle: "ইউনিট বাছুন, কার্ড তৈরি করুন, ফ্লিপ করুন, স্ট্রিক বাড়ান!",
     questionLbl: "প্রশ্ন",
     answerLbl: "উত্তর",
     topicLbl: "বিষয়",
@@ -268,7 +282,6 @@ const L10N: Record<
     finishedMsg: "আপনি ফ্ল্যাশকার্ড শেষ করেছেন!",
     practiceModeLabel: "শুধু 'আরো অনুশীলন' চিহ্নিত কার্ডগুলো অনুশীলন করুন",
     pointsLbl: "পয়েন্ট",
-
     levelComplete: "ডেক শেষ!",
     streak: "স্ট্রিক",
     rewardsTitle: "রিওয়ার্ড",
@@ -281,14 +294,17 @@ const L10N: Record<
     rankB: "প্রো",
     rankC: "রাইজিং স্টার",
     rankD: "চালিয়ে যান",
-
-    tapToFlipHint: "টিপ: “উত্তর দেখুন” ট্যাপ করে ফ্লিপ করুন",
+    tapToFlipHint: 'টিপ: "উত্তর দেখুন" ট্যাপ করে ফ্লিপ করুন',
     deckLabel: "ডেক",
     practiceLabel: "প্র্যাকটিস",
+    unitTitle: "ইউনিট বাছুন",
+    generateDeck: "ফ্ল্যাশকার্ড তৈরি করুন",
+    generatingDeck: "তৈরি হচ্ছে...",
+    aiFailed: "AI ফ্ল্যাশকার্ড তৈরি করতে পারেনি। ব্যাকআপ কার্ড দেখানো হচ্ছে।",
   },
   हिन्दी: {
-    title: "🧠 स्थानीय मान फ्लैशकार्ड!",
-    subtitle: "कार्ड फ्लिप करें, पॉइंट्स कमाएँ, स्ट्रीक बढ़ाएँ!",
+    title: "🧠 AI फ्लैशकार्ड!",
+    subtitle: "यूनिट चुनें, कार्ड बनाएं, फ्लिप करें और स्ट्रीक बढ़ाएँ!",
     questionLbl: "प्रश्न",
     answerLbl: "उत्तर",
     topicLbl: "विषय",
@@ -306,7 +322,6 @@ const L10N: Record<
     finishedMsg: "आपने फ्लैशकार्ड पूरे कर लिए!",
     practiceModeLabel: "सिर्फ 'और अभ्यास चाहिए' वाले कार्ड्स का अभ्यास करें",
     pointsLbl: "पॉइंट्स",
-
     levelComplete: "Deck Complete!",
     streak: "Streak",
     rewardsTitle: "Rewards",
@@ -319,18 +334,22 @@ const L10N: Record<
     rankB: "Pro",
     rankC: "Rising Star",
     rankD: "Keep Going",
-
-    tapToFlipHint: "टिप: “उत्तर दिखाएँ” टैप करके फ्लिप करें",
+    tapToFlipHint: 'टिप: "उत्तर दिखाएँ" टैप करके फ्लिप करें',
     deckLabel: "Deck",
     practiceLabel: "Practice",
+    unitTitle: "यूनिट चुनें",
+    generateDeck: "फ्लैशकार्ड बनाएं",
+    generatingDeck: "बन रहे हैं...",
+    aiFailed: "AI फ्लैशकार्ड नहीं बना सका। बैकअप कार्ड दिखाए जा रहे हैं।",
   },
 };
 
-/* ----------------------------- helpers ----------------------------------- */
+/* -------------------------------- helpers -------------------------------- */
 
 function clampPct(n: number) {
   return Math.max(0, Math.min(100, n));
 }
+
 function starsForPct(p: number) {
   if (p >= 90) return 5;
   if (p >= 75) return 4;
@@ -339,7 +358,117 @@ function starsForPct(p: number) {
   return 1;
 }
 
-/* ------------------------------- Component -------------------------------- */
+function normalizeGeneratedCards(input: unknown[], fallbackTopic: string): Card[] {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .map((item: any, index: number) => ({
+      id: String(index + 1),
+      front: String(item?.front ?? "").trim(),
+      back: String(item?.back ?? "").trim(),
+      topic: String(item?.topic ?? fallbackTopic).trim(),
+    }))
+    .filter((c) => c.front.length > 0 && c.back.length > 0);
+}
+
+function collectUnitTitles(node: unknown, out: Set<string>, seen = new WeakSet<object>()) {
+  if (!node || typeof node !== "object") return;
+
+  if (seen.has(node as object)) return;
+  seen.add(node as object);
+
+  if (Array.isArray(node)) {
+    node.forEach((item) => collectUnitTitles(item, out, seen));
+    return;
+  }
+
+  const obj = node as Record<string, unknown>;
+
+  if (typeof obj.unit === "string" && obj.unit.trim()) {
+    out.add(obj.unit.trim());
+  }
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (/^unit\s+\d+/i.test(key.trim())) {
+      out.add(key.trim());
+    }
+    collectUnitTitles(value, out, seen);
+  }
+}
+
+function getUnitTitles(): string[] {
+  const out = new Set<string>();
+  collectUnitTitles(LESSON_INFO, out);
+
+  const units = Array.from(out);
+  return units.length ? units : ["Unit 1: Place Value"];
+}
+
+function collectTranscripts(node: unknown, out: string[], seen = new WeakSet<object>()) {
+  if (!node) return;
+
+  if (Array.isArray(node)) {
+    node.forEach((item) => collectTranscripts(item, out, seen));
+    return;
+  }
+
+  if (typeof node !== "object") return;
+
+  if (seen.has(node as object)) return;
+  seen.add(node as object);
+
+  const obj = node as Record<string, unknown>;
+
+  if (typeof obj.transcript === "string" && obj.transcript.trim()) {
+    out.push(obj.transcript.trim());
+  }
+
+  for (const value of Object.values(obj)) {
+    collectTranscripts(value, out, seen);
+  }
+}
+
+function getTranscriptForUnit(unitTitle: string): string {
+  const found: string[] = [];
+
+  // 1) Try the existing helper first
+  try {
+    const direct = getLessonInfoByUnit(unitTitle as any);
+    collectTranscripts(direct, found);
+  } catch {}
+
+  // 2) Search LESSON_INFO recursively for any lesson/group matching this unit
+  const walk = (node: unknown, seen = new WeakSet<object>()) => {
+    if (!node || typeof node !== "object") return;
+
+    if (seen.has(node as object)) return;
+    seen.add(node as object);
+
+    if (Array.isArray(node)) {
+      node.forEach((item) => walk(item, seen));
+      return;
+    }
+
+    const obj = node as Record<string, unknown>;
+
+    if (typeof obj.unit === "string" && obj.unit.trim() === unitTitle.trim()) {
+      collectTranscripts(obj, found);
+    }
+
+    for (const [key, value] of Object.entries(obj)) {
+      if (key.trim() === unitTitle.trim()) {
+        collectTranscripts(value, found);
+      }
+      walk(value, seen);
+    }
+  };
+
+  walk(LESSON_INFO);
+
+  return Array.from(new Set(found)).join("\n\n").trim();
+}
+
+/* -------------------------------- Component -------------------------------- */
 
 export default function Flashcards() {
   const insets = useSafeAreaInsets();
@@ -347,11 +476,17 @@ export default function Flashcards() {
   const isTablet = width >= 900;
   const isLandscape = width > height;
 
+  const unitTitles = useMemo(() => getUnitTitles(), []);
+
   const [cards, setCards] = useState<Card[]>([]);
   const [baseCards, setBaseCards] = useState<Card[]>(SEED);
   const [current, setCurrent] = useState(0);
+  const [selectedUnit, setSelectedUnit] = useState<string>(
+    unitTitles[0] ?? "Unit 1: Place Value"
+  );
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [deckSource, setDeckSource] = useState<"ai" | "fallback" | "seed">("seed");
 
-  // tracking
   const [completed, setCompleted] = useState<string[]>([]);
   const [correct, setCorrect] = useState(0);
   const [incorrect, setIncorrect] = useState(0);
@@ -359,22 +494,19 @@ export default function Flashcards() {
   const [isFinished, setIsFinished] = useState(false);
   const [mode, setMode] = useState<"deck" | "practice">("deck");
 
-  // streak
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
 
-  // language
   const [lang, setLang] = useState<Lang>("English");
   const T = useMemo(() => L10N[lang], [lang]);
   const isRTL = lang === "اردو";
   const rtl = isRTL
     ? ({
-        writingDirection: "rtl" as "rtl",
+        writingDirection: "rtl" as const,
         textAlign: "right" as const,
       } as const)
     : undefined;
 
-  // flip animation
   const flip = useRef(new Animated.Value(0)).current;
   const [showBack, setShowBack] = useState(false);
 
@@ -382,47 +514,70 @@ export default function Flashcards() {
     inputRange: [0, 1],
     outputRange: ["0deg", "180deg"],
   });
+
   const rotateYBack = flip.interpolate({
     inputRange: [0, 1],
     outputRange: ["180deg", "360deg"],
   });
 
-  // tiny “pop” when marking answer
   const pop = useRef(new Animated.Value(1)).current;
-
-  // background float
   const floaty = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(floaty, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(floaty, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(floaty, {
+          toValue: 1,
+          duration: 2400,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floaty, {
+          toValue: 0,
+          duration: 2400,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
       ])
     ).start();
   }, [floaty]);
 
-  const bubbleShift = floaty.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
-  const bubbleShift2 = floaty.interpolate({ inputRange: [0, 1], outputRange: [0, 12] });
+  const bubbleShift = floaty.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -10],
+  });
+
+  const bubbleShift2 = floaty.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 12],
+  });
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       const onboarding = await loadJSON<OnboardingData | null>(ONBOARD_KEY, null);
       const savedLang = (onboarding?.language as Lang) || "English";
-      setLang(LANGS.includes(savedLang) ? savedLang : "English");
 
-      const stored = await loadJSON<Card[]>("cards", SEED);
-      const base = stored.length ? stored : SEED;
-      setBaseCards(base);
-      setCards(base);
+      if (!cancelled) {
+        setLang(LANGS.includes(savedLang) ? savedLang : "English");
+      }
 
-      resetSession(true, base);
+      const firstUnit = unitTitles[0] ?? "Unit 1: Place Value";
+
+      if (!cancelled) {
+        setSelectedUnit(firstUnit);
+        await generateDeck(firstUnit);
+      }
     })();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const currentCard = cards[current] ?? null;
-
   const points = correct * 10 + bestStreak * 5 + (isFinished ? 25 : 0);
 
   const progressPct = useMemo(() => {
@@ -503,6 +658,7 @@ export default function Flashcards() {
 
     if (!completed.includes(currentCard.id)) {
       setCompleted((s) => [...s, currentCard.id]);
+
       if (isCorrectAns) {
         setCorrect((n) => n + 1);
         setStreak((s) => {
@@ -523,18 +679,23 @@ export default function Flashcards() {
     nextCard();
   }
 
-  function resetSession(init = false, base?: Card[]) {
-    const source = base ?? (baseCards.length ? baseCards : SEED);
+  function resetSession(init = false, source?: Card[], clearPractice = false) {
+    const deck = source ?? (baseCards.length ? baseCards : SEED);
+
     setMode("deck");
-    setCards(source);
+    setCards(deck);
     setCurrent(0);
     setCompleted([]);
     setCorrect(0);
     setIncorrect(0);
-    setNeedsPracticeIds((ids) => ids); // keep practice ids across runs
     setStreak(0);
     setBestStreak(0);
     setIsFinished(false);
+
+    if (clearPractice) {
+      setNeedsPracticeIds([]);
+    }
+
     resetFlip(init);
   }
 
@@ -543,6 +704,7 @@ export default function Flashcards() {
       Alert.alert(T.finishedTitle, T.noWrong);
       return;
     }
+
     const practiceCards = baseCards.filter((c) => needsPracticeIds.includes(c.id));
     if (!practiceCards.length) return;
 
@@ -558,22 +720,71 @@ export default function Flashcards() {
     resetFlip(true);
   }
 
-  // ✅ responsive card sizing (no fixed height that breaks on rotate)
-  // clamp so it never gets too tall or too tiny
-  const maxCardHeight = Math.min(isTablet ? 420 : 340, Math.floor(height * (isLandscape ? 0.55 : 0.38)));
+  async function generateDeck(unit: string) {
+    if (isGenerating) return;
+
+    try {
+      setIsGenerating(true);
+
+      const transcript = getTranscriptForUnit(unit);
+
+      if (!transcript) {
+        console.log("No transcript found for unit:", unit);
+        console.log("Available unit titles:", unitTitles);
+        setDeckSource("seed");
+        setBaseCards(SEED);
+        resetSession(true, SEED, true);
+        return;
+      }
+
+      const generated = await generateFlashcardsFromTranscript(transcript, unit);
+      const normalized = normalizeGeneratedCards(generated, unit);
+
+      if (!normalized.length) {
+        throw new Error("No flashcards were generated.");
+      }
+
+      const hasRealContent = normalized.some(
+        (c) =>
+          !c.front.startsWith("What does this mean?") &&
+          !c.front.startsWith("What is ") &&
+          !c.front.startsWith("Practice ")
+      );
+
+      setDeckSource(hasRealContent ? "ai" : "fallback");
+      setBaseCards(normalized);
+      resetSession(true, normalized, true);
+    } catch (error) {
+      console.log("Flashcard generation failed:", error);
+      setDeckSource("seed");
+      setBaseCards(SEED);
+      resetSession(true, SEED, true);
+      Alert.alert(T.finishedTitle, T.aiFailed);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  const maxCardHeight = Math.min(
+    isTablet ? 420 : 340,
+    Math.floor(height * (isLandscape ? 0.55 : 0.38))
+  );
   const cardHeight = Math.max(isTablet ? 300 : 260, maxCardHeight);
   const cardWrapHeight = cardHeight + 30;
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "left", "right"]}>
-      <LinearGradient colors={["#FFF6D5", "#EAF4FF", "#E9FFF1"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.bg}>
-        {/* background bubbles */}
+      <LinearGradient
+        colors={["#FFF6D5", "#EAF4FF", "#E9FFF1"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={s.bg}
+      >
         <Animated.View style={[s.bubble, s.b1, { transform: [{ translateY: bubbleShift }] }]} />
         <Animated.View style={[s.bubble, s.b2, { transform: [{ translateY: bubbleShift2 }] }]} />
         <Animated.View style={[s.bubble, s.b3, { transform: [{ translateY: bubbleShift }] }]} />
         <Animated.View style={[s.bubble, s.b4, { transform: [{ translateY: bubbleShift2 }] }]} />
 
-        {/* ✅ SCROLLVIEW so rotate never cuts UI */}
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={[
@@ -586,7 +797,6 @@ export default function Flashcards() {
           showsVerticalScrollIndicator={false}
           bounces
         >
-          {/* Header */}
           <View style={s.header}>
             <View style={s.titleRow}>
               <View style={s.mascot}>
@@ -594,7 +804,49 @@ export default function Flashcards() {
               </View>
               <Text style={[s.h1, rtl]}>{T.title}</Text>
             </View>
+
             <Text style={[s.sub, rtl]}>{T.subtitle}</Text>
+
+            <View style={s.unitBlock}>
+              <Text style={[s.sectionLabel, rtl]}>{T.unitTitle}</Text>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={s.unitRow}
+              >
+                {unitTitles.map((unit, index) => {
+                  const active = selectedUnit === unit;
+                  return (
+                    <TouchableOpacity
+                      key={`${unit}-${index}`}
+                      onPress={() => setSelectedUnit(unit)}
+                      style={[s.unitChip, active && s.unitChipActive]}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[s.unitChipText, active && s.unitChipTextActive]}>
+                        {unit}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <TouchableOpacity
+                onPress={() => generateDeck(selectedUnit)}
+                disabled={isGenerating}
+                style={[s.generateBtn, isGenerating && s.disabled]}
+              >
+                {isGenerating ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Ionicons name="sparkles" size={18} color="#fff" />
+                )}
+                <Text style={s.generateBtnText}>
+                  {isGenerating ? T.generatingDeck : T.generateDeck}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={s.headerStatsRow}>
               <View style={[s.pill, s.pillSoftBlue]}>
@@ -617,6 +869,13 @@ export default function Flashcards() {
                   {completed.length}/{cards.length}
                 </Text>
               </View>
+
+              {deckSource === "ai" && (
+                <View style={[s.pill, { borderColor: "rgba(91,53,242,0.22)" }]}>
+                  <Ionicons name="sparkles" size={14} color="#5B35F2" />
+                  <Text style={[s.pillTxt, { color: "#5B35F2" }]}>AI</Text>
+                </View>
+              )}
             </View>
 
             <View style={s.progressOuter}>
@@ -629,12 +888,16 @@ export default function Flashcards() {
             </View>
           </View>
 
-          {!isFinished ? (
+          {isGenerating ? (
+            <View style={s.loaderCard}>
+              <ActivityIndicator size="large" color="#5B35F2" />
+              <Text style={s.loaderTitle}>{T.generatingDeck}</Text>
+              <Text style={s.loaderSub}>Using transcript-based AI generation...</Text>
+            </View>
+          ) : !isFinished ? (
             <>
-              {/* Flip Card */}
               <Animated.View style={{ transform: [{ scale: pop }] }}>
                 <View style={[s.cardWrap, { height: cardWrapHeight }]}>
-                  {/* Front */}
                   <Animated.View
                     style={[
                       s.card,
@@ -666,12 +929,15 @@ export default function Flashcards() {
                     <Text style={[s.big, rtl]}>{currentCard?.front ?? "—"}</Text>
 
                     <View style={s.tapHint}>
-                      <Ionicons name="hand-left-outline" size={16} color="rgba(17,24,39,0.75)" />
+                      <Ionicons
+                        name="hand-left-outline"
+                        size={16}
+                        color="rgba(17,24,39,0.75)"
+                      />
                       <Text style={[s.tapHintTxt, rtl]}>{T.tapToFlipHint}</Text>
                     </View>
                   </Animated.View>
 
-                  {/* Back */}
                   <Animated.View
                     style={[
                       s.card,
@@ -710,25 +976,37 @@ export default function Flashcards() {
                 </View>
               </Animated.View>
 
-              {/* Controls */}
               <View style={s.row}>
-                <TouchableOpacity disabled={current === 0} onPress={prevCard} style={[s.btn, s.btnGhost, current === 0 && s.disabled]}>
+                <TouchableOpacity
+                  disabled={current === 0}
+                  onPress={prevCard}
+                  style={[s.btn, s.btnGhost, current === 0 && s.disabled]}
+                >
                   <Ionicons name="arrow-back" size={18} color="#111827" />
                   <Text style={[s.btnGhostTxt, rtl]}>{T.prev}</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={onShowAnswer} disabled={!currentCard} style={[s.btn, s.btnPrimary, !currentCard && s.disabled]}>
+                <TouchableOpacity
+                  onPress={onShowAnswer}
+                  disabled={!currentCard}
+                  style={[s.btn, s.btnPrimary, !currentCard && s.disabled]}
+                >
                   <Ionicons name="swap-horizontal" size={18} color="#fff" />
-                  <Text style={[s.btnPrimaryTxt, rtl]}>{showBack ? T.hideAnswer : T.showAnswer}</Text>
+                  <Text style={[s.btnPrimaryTxt, rtl]}>
+                    {showBack ? T.hideAnswer : T.showAnswer}
+                  </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={nextCard} disabled={!currentCard} style={[s.btn, s.btnGhost, !currentCard && s.disabled]}>
+                <TouchableOpacity
+                  onPress={nextCard}
+                  disabled={!currentCard}
+                  style={[s.btn, s.btnGhost, !currentCard && s.disabled]}
+                >
                   <Text style={[s.btnGhostTxt, rtl]}>{T.next}</Text>
                   <Ionicons name="arrow-forward" size={18} color="#111827" />
                 </TouchableOpacity>
               </View>
 
-              {/* Correct/Incorrect + Ask AI (only when flipped) */}
               {showBack && (
                 <>
                   <View style={[s.row, { marginTop: 10 }]}>
@@ -746,7 +1024,7 @@ export default function Flashcards() {
                   <View style={{ marginTop: 10 }}>
                     <AskAIButton
                       question={currentCard?.front ?? ""}
-                      userAnswer={currentCard?.back ?? ""}
+                      userAnswer=""
                       correctAnswer={currentCard?.back ?? ""}
                       contextType="flashcard"
                     />
@@ -754,15 +1032,16 @@ export default function Flashcards() {
                 </>
               )}
 
-              {/* Practice toggle */}
               <TouchableOpacity onPress={startNeedsPracticeMode} style={s.practiceToggle}>
                 <Ionicons name="refresh" size={16} color="#111827" />
                 <Text style={[s.practiceToggleText, rtl]}>{T.practiceModeLabel}</Text>
               </TouchableOpacity>
 
-              {/* Reset */}
               <View style={{ marginTop: 10 }}>
-                <TouchableOpacity onPress={() => resetSession()} style={s.resetBtn}>
+                <TouchableOpacity
+                  onPress={() => resetSession(false, baseCards, false)}
+                  style={s.resetBtn}
+                >
                   <Ionicons name="reload" size={18} color="#fff" />
                   <Text style={s.resetTxt}>{T.reset}</Text>
                 </TouchableOpacity>
@@ -783,9 +1062,15 @@ export default function Flashcards() {
                       {T.rank}: {rankLabel}
                     </Text>
                   </View>
+
                   <View style={s.doneStarsRow}>
                     {Array.from({ length: 5 }).map((_, i) => (
-                      <Ionicons key={i} name={i < starCount ? "star" : "star-outline"} size={18} color="#FFD54A" />
+                      <Ionicons
+                        key={i}
+                        name={i < starCount ? "star" : "star-outline"}
+                        size={18}
+                        color="#FFD54A"
+                      />
                     ))}
                   </View>
                 </View>
@@ -796,12 +1081,15 @@ export default function Flashcards() {
                   <View style={s.bigScorePill}>
                     <Text style={s.bigScoreText}>{resultPct}%</Text>
                   </View>
+
                   <View style={{ flex: 1 }}>
                     <Text style={[s.doneScore, rtl]}>
                       {correct} correct • {incorrect} needs practice
                     </Text>
                     <View style={s.miniBarOuter}>
-                      <View style={[s.miniBarInner, { width: `${clampPct(resultPct)}%` }]} />
+                      <View
+                        style={[s.miniBarInner, { width: `${clampPct(resultPct)}%` }]}
+                      />
                     </View>
                   </View>
                 </View>
@@ -817,12 +1105,14 @@ export default function Flashcards() {
                       </View>
                       <Text style={s.rewardText}>+ {correct * 10} XP</Text>
                     </View>
+
                     <View style={s.rewardRow}>
                       <View style={s.rewardIcon}>
                         <Ionicons name="flame" size={16} color="#F59E0B" />
                       </View>
                       <Text style={s.rewardText}>Best streak: {bestStreak}</Text>
                     </View>
+
                     <View style={s.rewardRow}>
                       <View style={s.rewardIcon}>
                         <Ionicons name="diamond" size={16} color="#5B35F2" />
@@ -866,13 +1156,20 @@ export default function Flashcards() {
                 </TouchableOpacity>
               )}
 
-              <TouchableOpacity onPress={() => resetSession()} style={s.doneReplayBtn}>
+              <TouchableOpacity
+                onPress={() => resetSession(false, baseCards, false)}
+                style={s.doneReplayBtn}
+              >
                 <Ionicons name="play" size={18} color="#fff" />
                 <Text style={s.doneReplayText}>{T.playAgain}</Text>
               </TouchableOpacity>
 
               <View style={{ marginTop: 12 }}>
-                <NextStepFooter onPlayAgain={() => resetSession()} nextLessonPath="/tabs/lessons" nextQuizPath="/tabs/quizzes" />
+                <NextStepFooter
+                  onPlayAgain={() => resetSession(false, baseCards, false)}
+                  nextLessonPath="/tabs/lessons"
+                  nextQuizPath="/tabs/quizzes"
+                />
               </View>
             </View>
           )}
@@ -889,16 +1186,37 @@ const WHITE = "rgba(255,255,255,0.96)";
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#EAF4FF" },
   bg: { flex: 1 },
-
-  // ✅ scroll content container
   content: { paddingHorizontal: 14 },
 
-  /* background bubbles */
   bubble: { position: "absolute", borderRadius: 999, opacity: 0.55 },
-  b1: { width: 220, height: 220, backgroundColor: "rgba(47,107,255,0.18)", top: -60, left: -70 },
-  b2: { width: 180, height: 180, backgroundColor: "rgba(34,197,94,0.16)", top: 90, right: -70 },
-  b3: { width: 260, height: 260, backgroundColor: "rgba(255,183,3,0.16)", bottom: -90, left: -80 },
-  b4: { width: 160, height: 160, backgroundColor: "rgba(91,53,242,0.14)", bottom: 90, right: -60 },
+  b1: {
+    width: 220,
+    height: 220,
+    backgroundColor: "rgba(47,107,255,0.18)",
+    top: -60,
+    left: -70,
+  },
+  b2: {
+    width: 180,
+    height: 180,
+    backgroundColor: "rgba(34,197,94,0.16)",
+    top: 90,
+    right: -70,
+  },
+  b3: {
+    width: 260,
+    height: 260,
+    backgroundColor: "rgba(255,183,3,0.16)",
+    bottom: -90,
+    left: -80,
+  },
+  b4: {
+    width: 160,
+    height: 160,
+    backgroundColor: "rgba(91,53,242,0.14)",
+    bottom: 90,
+    right: -60,
+  },
 
   header: { alignItems: "center", marginBottom: 10 },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -918,9 +1236,77 @@ const s = StyleSheet.create({
     elevation: 4,
   },
   h1: { fontSize: 22, fontWeight: "900", color: "#111827" },
-  sub: { color: "rgba(17,24,39,0.68)", marginTop: 6, fontWeight: "800", textAlign: "center" },
+  sub: {
+    color: "rgba(17,24,39,0.68)",
+    marginTop: 6,
+    fontWeight: "800",
+    textAlign: "center",
+  },
 
-  headerStatsRow: { marginTop: 10, flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "center" },
+  unitBlock: {
+    width: "100%",
+    marginTop: 14,
+    backgroundColor: WHITE,
+    borderRadius: 18,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#111827",
+    marginBottom: 10,
+  },
+  unitRow: {
+    gap: 10,
+    paddingRight: 4,
+  },
+  unitChip: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "rgba(17,24,39,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(17,24,39,0.08)",
+    marginRight: 8,
+  },
+  unitChipActive: {
+    backgroundColor: "rgba(91,53,242,0.12)",
+    borderColor: "rgba(91,53,242,0.28)",
+  },
+  unitChipText: {
+    color: "#111827",
+    fontWeight: "800",
+  },
+  unitChipTextActive: {
+    color: "#5B35F2",
+    fontWeight: "900",
+  },
+  generateBtn: {
+    marginTop: 12,
+    backgroundColor: "#5B35F2",
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  generateBtnText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 15,
+  },
+
+  headerStatsRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
   pill: {
     flexDirection: "row",
     alignItems: "center",
@@ -948,6 +1334,29 @@ const s = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.06)",
   },
   progressInner: { height: "100%", borderRadius: 999 },
+
+  loaderCard: {
+    marginTop: 16,
+    backgroundColor: WHITE,
+    borderRadius: 22,
+    padding: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+  },
+  loaderTitle: {
+    marginTop: 12,
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  loaderSub: {
+    marginTop: 6,
+    color: "rgba(17,24,39,0.7)",
+    fontWeight: "700",
+    textAlign: "center",
+  },
 
   cardWrap: { alignItems: "center", justifyContent: "center", marginTop: 10 },
   card: {
@@ -980,18 +1389,42 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-  tag: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, maxWidth: "68%" },
-  tagPurple: { backgroundColor: "rgba(91,53,242,0.10)", borderColor: "rgba(91,53,242,0.22)" },
+  tag: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    maxWidth: "68%",
+  },
+  tagPurple: {
+    backgroundColor: "rgba(91,53,242,0.10)",
+    borderColor: "rgba(91,53,242,0.22)",
+  },
   tagTxtPurple: { color: "#5B35F2", fontWeight: "900" },
-  tagOrange: { backgroundColor: "rgba(245,158,11,0.12)", borderColor: "rgba(245,158,11,0.26)" },
+  tagOrange: {
+    backgroundColor: "rgba(245,158,11,0.12)",
+    borderColor: "rgba(245,158,11,0.26)",
+  },
   tagTxtOrange: { color: "#B45309", fontWeight: "900" },
-  tagBlue: { backgroundColor: "rgba(47,107,255,0.10)", borderColor: "rgba(47,107,255,0.22)" },
+  tagBlue: {
+    backgroundColor: "rgba(47,107,255,0.10)",
+    borderColor: "rgba(47,107,255,0.22)",
+  },
   tagTxtBlue: { color: "#2F6BFF", fontWeight: "900" },
-  tagGreen: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.24)" },
+  tagGreen: {
+    backgroundColor: "rgba(34,197,94,0.10)",
+    borderColor: "rgba(34,197,94,0.24)",
+  },
   tagTxtGreen: { color: "#16A34A", fontWeight: "900" },
 
   label: { color: "rgba(17,24,39,0.70)", fontWeight: "900", marginBottom: 8 },
-  big: { color: "#111827", fontSize: 24, fontWeight: "900", textAlign: "center", lineHeight: 32 },
+  big: {
+    color: "#111827",
+    fontSize: 24,
+    fontWeight: "900",
+    textAlign: "center",
+    lineHeight: 32,
+  },
 
   tapHint: {
     position: "absolute",
@@ -1022,7 +1455,13 @@ const s = StyleSheet.create({
   },
   backBadgeTxt: { color: "#111827", fontWeight: "900" },
 
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 10 },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 10,
+  },
 
   btn: {
     flex: 1,
@@ -1082,7 +1521,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     shadowColor: "#000",
-    shadowOpacity: 0.10,
+    shadowOpacity: 0.1,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 8 },
     elevation: 6,
@@ -1091,7 +1530,6 @@ const s = StyleSheet.create({
 
   disabled: { opacity: 0.5 },
 
-  /* DONE */
   doneBanner: {
     borderRadius: 22,
     padding: 16,
@@ -1102,7 +1540,11 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     elevation: 10,
   },
-  doneBannerTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  doneBannerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   doneBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1115,7 +1557,12 @@ const s = StyleSheet.create({
   doneBadgeText: { color: "#111827", fontWeight: "900" },
   doneStarsRow: { flexDirection: "row", gap: 4 },
   doneTitle: { marginTop: 12, color: "#fff", fontWeight: "900", fontSize: 28 },
-  doneScoreRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 12 },
+  doneScoreRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
 
   bigScorePill: {
     width: 96,

@@ -26,6 +26,13 @@ export interface GeneratedQuestion {
   explanation: string;
 }
 
+export interface GeneratedFlashcard {
+  id: number;
+  front: string;
+  back: string;
+  topic: string;
+}
+
 /* ============================== STATE ============================== */
 
 type AIState = "idle" | "downloading" | "loading" | "ready" | "error";
@@ -137,10 +144,13 @@ async function getContext(
 
   setState("loading");
 
+  // FIX 1: Increased n_ctx from 512 → 2048
+  // 512 was far too small — the prompt + transcript + generated JSON
+  // easily exceeds 512 tokens, causing truncated / garbage output.
   ctx = await initLlama({
     model: modelPath,
-    n_ctx: 1024,
-    n_threads: 4,
+    n_ctx: 2048,
+    n_threads: 6,
     use_mlock: false,
   });
 
@@ -162,47 +172,10 @@ export async function prepareAI(): Promise<void> {
 /* ============================== QUIZ GENERATION ============================== */
 
 const QUIZ_COUNT = 10;
+const AI_QUIZ_TARGET = 4;
 
 const QUIZ_GENERATION_PROMPT = `
-You are Offklass AI. Create exactly 10 multiple choice math questions for Grade 4 using ONLY the transcript facts.
-
-OUTPUT FORMAT (STRICT, NO MARKDOWN):
-Q1: <question>
-A) <option>
-B) <option>
-C) <option>
-D) <option>
-ANS: <exact option text>
-WHY: <one short sentence explanation>
-
-Q2: <question>
-A) <option>
-B) <option>
-C) <option>
-D) <option>
-ANS: <exact option text>
-WHY: <one short sentence explanation>
-
-Continue until Q10.
-
-RULES:
-- Use only transcript content.
-- Each question must be Grade 4 appropriate.
-- Make most questions number-based.
-- Exactly 4 options per question.
-- Options must be real answer choices, not filler.
-- "ANS:" must match one option exactly.
-- "WHY:" should be short and simple.
-- No intro.
-- No summary.
-- No extra commentary.
-- No repeated questions.
-
-Transcript:
-`;
-
-const QUIZ_REPAIR_PROMPT = `
-Fix the text below into exactly 10 multiple choice quiz questions.
+You are Offklass AI. Create exactly 4 multiple choice math questions for Grade 4 using ONLY the transcript facts.
 
 STRICT FORMAT:
 Q1: <question>
@@ -213,18 +186,21 @@ D) <option>
 ANS: <exact option text>
 WHY: <one short sentence explanation>
 
-Continue until Q10.
+Continue until Q4.
 
 RULES:
+- Use only transcript content
+- Grade 4 level only
+- Most questions should be number-based
+- Exactly 4 options per question
+- ANS must match one option exactly
+- WHY must be short and simple
 - No intro
 - No summary
 - No markdown
-- Each question must have exactly 4 options
-- ANS must match one option exactly
-- Keep questions simple and Grade 4 friendly
-- Use the source text only
+- No repeated questions
 
-Source text:
+Transcript:
 `;
 
 export async function generateQuizFromTranscript(
@@ -235,20 +211,21 @@ export async function generateQuizFromTranscript(
   try {
     const engine = await getContext("gemma2b");
 
-    const trimmedTranscript = (transcript ?? "").slice(0, 6000);
+    const trimmedTranscript = (transcript ?? "").slice(0, 1400);
 
     const prompt =
       QUIZ_GENERATION_PROMPT +
       trimmedTranscript +
-      `\n\nLesson: ${lessonTitle}\nTopic: ${topic}\n\nCreate the 10 questions now.`;
+      `\n\nLesson: ${lessonTitle}\nTopic: ${topic}\n\nCreate the 4 questions now.`;
 
     const { text } = await engine.completion({
       prompt: formatMessagesForGemma([
         { id: "qz1", role: "user", content: prompt },
       ]),
-      n_predict: 1400,
+      n_predict: 480,
       temperature: 0.1,
       top_p: 0.9,
+      top_k: 40,
       stop: ["<end_of_turn>", "<eos>"],
     });
 
@@ -261,53 +238,259 @@ export async function generateQuizFromTranscript(
     let parsed = parseQuizResponse(cleaned, lessonTitle, topic);
     parsed = postProcessGeneratedQuestions(parsed, topic);
 
-    console.log("First sanitized quiz count:", parsed.length);
+    console.log("AI-generated quiz count:", parsed.length);
 
-    if (parsed.length >= QUIZ_COUNT) {
-      return parsed.slice(0, QUIZ_COUNT);
-    }
+    const finalQuiz = fillQuizWithFallbacks(parsed, topic);
 
-    console.log("Attempting quiz repair pass...");
-
-    const repairPrompt =
-      QUIZ_REPAIR_PROMPT +
-      cleaned +
-      `\n\nLesson: ${lessonTitle}\nTopic: ${topic}\n\nFix the quiz now.`;
-
-    const repaired = await engine.completion({
-      prompt: formatMessagesForGemma([
-        { id: "qz2", role: "user", content: repairPrompt },
-      ]),
-      n_predict: 1400,
-      temperature: 0.05,
-      top_p: 0.9,
-      stop: ["<end_of_turn>", "<eos>"],
-    });
-
-    const cleanedRepair = cleanGemmaOutput(repaired.text);
-
-    console.log("----------- QUIZ REPAIR RESPONSE START -----------");
-    console.log(cleanedRepair);
-    console.log("----------- QUIZ REPAIR RESPONSE END -----------");
-
-    let repairedParsed = parseQuizResponse(cleanedRepair, lessonTitle, topic);
-    repairedParsed = postProcessGeneratedQuestions(repairedParsed, topic);
-
-    console.log("Second sanitized quiz count:", repairedParsed.length);
-
-    const combined = postProcessGeneratedQuestions(
-      [...parsed, ...repairedParsed],
-      topic
-    );
-
-    const finalQuiz = fillQuizWithFallbacks(combined, topic);
-
-    console.log("Final quiz count:", finalQuiz.length);
+    console.log("Final quiz count (with fallbacks):", finalQuiz.length);
 
     return finalQuiz.slice(0, QUIZ_COUNT);
   } catch (err) {
     console.error("Quiz generation error:", err);
     return fillQuizWithFallbacks([], topic).slice(0, QUIZ_COUNT);
+  }
+}
+
+/* ============================== FLASHCARD GENERATION ============================== */
+
+const FLASHCARD_COUNT = 10;
+
+// FIX 2: Shortened the prompt to save tokens for actual output.
+// Reduced from 10 → 8 requested cards for reliability with small models.
+const FLASHCARD_AI_TARGET = 8;
+
+const FLASHCARD_GENERATION_PROMPT = `You are Offklass AI. Create ${FLASHCARD_AI_TARGET} flashcards for Grade 4 from the transcript below.
+
+Return ONLY a JSON array. No markdown. No explanation outside JSON.
+
+Format: [{"front":"question","back":"short answer","topic":"label"}]
+
+Rules:
+- Use transcript content only
+- Grade 4 level, simple wording
+- front = short question or term
+- back = short clear answer
+- topic = short label
+- No duplicates
+
+Transcript:
+`;
+
+/**
+ * FIX 3: Improved JSON parser that handles truncated output.
+ * Small models often cut off mid-JSON. This attempts to repair
+ * truncated arrays by closing them before parsing.
+ */
+function safeParseFlashcards(raw: string): GeneratedFlashcard[] {
+  try {
+    let cleaned = raw
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const start = cleaned.indexOf("[");
+    if (start === -1) return [];
+
+    let end = cleaned.lastIndexOf("]");
+
+    // If no closing bracket, the model likely got truncated.
+    // Try to repair by finding the last complete object and closing the array.
+    if (end === -1 || end <= start) {
+      const lastBrace = cleaned.lastIndexOf("}");
+      if (lastBrace > start) {
+        cleaned = cleaned.slice(0, lastBrace + 1) + "]";
+        end = cleaned.length - 1;
+      } else {
+        return [];
+      }
+    }
+
+    let jsonText = cleaned.slice(start, end + 1);
+
+    // Fix trailing comma before ] which is invalid JSON
+    jsonText = jsonText.replace(/,\s*\]/, "]");
+
+    // Fix truncated last object: remove incomplete trailing object
+    // e.g. [..., {"front":"abc","back":  ]  → remove that broken entry
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (!Array.isArray(parsed)) return [];
+
+      return parsed
+        .map((item: any, index: number) => ({
+          id: index + 1,
+          front: String(item?.front ?? "").trim(),
+          back: String(item?.back ?? "").trim(),
+          topic: String(item?.topic ?? "General").trim(),
+        }))
+        .filter(
+          (card: GeneratedFlashcard) =>
+            card.front.length > 0 && card.back.length > 0
+        );
+    } catch {
+      // JSON still invalid — try removing the last potentially broken object
+      const lastGoodComma = jsonText.lastIndexOf("},");
+      if (lastGoodComma > start) {
+        const repaired = jsonText.slice(0, lastGoodComma + 1) + "]";
+        const parsed = JSON.parse(repaired);
+        if (!Array.isArray(parsed)) return [];
+
+        return parsed
+          .map((item: any, index: number) => ({
+            id: index + 1,
+            front: String(item?.front ?? "").trim(),
+            back: String(item?.back ?? "").trim(),
+            topic: String(item?.topic ?? "General").trim(),
+          }))
+          .filter(
+            (card: GeneratedFlashcard) =>
+              card.front.length > 0 && card.back.length > 0
+          );
+      }
+
+      return [];
+    }
+  } catch (err) {
+    console.log("safeParseFlashcards error:", err);
+    return [];
+  }
+}
+
+/**
+ * FIX 4: Improved fallback that creates actually useful flashcards
+ * from the transcript instead of generic "Flashcard 1" placeholders.
+ */
+function buildFlashcardFallback(
+  transcript: string,
+  unitTitle: string
+): GeneratedFlashcard[] {
+  const cleaned = (transcript ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+
+  const sentences = cleaned
+    .split(/[.\n]/)
+    .map((s) => s.trim())
+    .filter(
+      (s) =>
+        s.length > 20 &&
+        s.length < 200 &&
+        !s.startsWith("-") &&
+        !/^(welcome|hi |hey |hello)/i.test(s)
+    );
+
+  const cards: GeneratedFlashcard[] = [];
+
+  for (let i = 0; i < Math.min(sentences.length, FLASHCARD_COUNT); i++) {
+    const sentence = sentences[i];
+    cards.push({
+      id: i + 1,
+      front: `What does this mean? "${sentence.slice(0, 80)}${sentence.length > 80 ? "..." : ""}"`,
+      back: sentence,
+      topic: unitTitle,
+    });
+  }
+
+  // If we still don't have enough, add topic-based generic cards
+  const genericCards = [
+    { front: `What is ${unitTitle} about?`, back: `It covers key concepts in ${unitTitle} for Grade 4 Math.` },
+    { front: `Why is ${unitTitle} important?`, back: `It builds foundational math skills needed for higher grades.` },
+    { front: `Give an example related to ${unitTitle}.`, back: `Review the lesson video for worked examples.` },
+    { front: `What should you practice for ${unitTitle}?`, back: `Try solving problems step by step and check your work.` },
+    { front: `How can you check your answer?`, back: `Use the reverse operation or plug your answer back in.` },
+  ];
+
+  let gi = 0;
+  while (cards.length < FLASHCARD_COUNT && gi < genericCards.length) {
+    cards.push({
+      id: cards.length + 1,
+      front: genericCards[gi].front,
+      back: genericCards[gi].back,
+      topic: unitTitle,
+    });
+    gi++;
+  }
+
+  return cards.slice(0, FLASHCARD_COUNT);
+}
+
+export async function generateFlashcardsFromTranscript(
+  transcript: string,
+  unitTitle: string
+): Promise<GeneratedFlashcard[]> {
+  try {
+    const engine = await getContext("gemma2b");
+
+    // FIX 5: Reduced transcript slice from 1800 → 1000 chars.
+    // With n_ctx=2048, we need room for: prompt (~200 tokens) +
+    // transcript (~250-300 tokens) + generated JSON (~500-600 tokens).
+    // 1800 chars was eating too much context, leaving no room for output.
+    const trimmedTranscript = (transcript ?? "").slice(0, 1000);
+
+    const prompt =
+      FLASHCARD_GENERATION_PROMPT +
+      trimmedTranscript +
+      `\n\nUnit: ${unitTitle}\n\nJSON:`;
+
+    // FIX 6: Increased n_predict from 260 → 800.
+    // 260 tokens can only fit ~3-4 JSON flashcard objects before truncating.
+    // 800 tokens gives enough room for 8-10 complete flashcard objects.
+    const { text } = await engine.completion({
+      prompt: formatMessagesForGemma([
+        { id: "fc1", role: "user", content: prompt },
+      ]),
+      n_predict: 800,
+      temperature: 0.15,
+      top_p: 0.9,
+      top_k: 40,
+      stop: ["<end_of_turn>", "<eos>"],
+    });
+
+    const cleaned = cleanGemmaOutput(text);
+
+    console.log("----------- FLASHCARD RAW RESPONSE START -----------");
+    console.log(cleaned);
+    console.log("----------- FLASHCARD RAW RESPONSE END -----------");
+
+    const parsed = safeParseFlashcards(cleaned);
+
+    console.log("Parsed flashcard count:", parsed.length);
+
+    if (parsed.length >= 3) {
+      // We got at least 3 good AI cards — use them, pad with fallback if needed
+      const aiCards = parsed.slice(0, FLASHCARD_COUNT).map((card, index) => ({
+        ...card,
+        id: index + 1,
+        topic: card.topic || unitTitle,
+      }));
+
+      if (aiCards.length >= FLASHCARD_COUNT) return aiCards;
+
+      // Pad remaining slots with fallback cards
+      const fallback = buildFlashcardFallback(trimmedTranscript, unitTitle);
+      const usedFronts = new Set(aiCards.map((c) => c.front.toLowerCase()));
+      const extras = fallback.filter(
+        (c) => !usedFronts.has(c.front.toLowerCase())
+      );
+
+      const combined = [...aiCards];
+      for (const card of extras) {
+        if (combined.length >= FLASHCARD_COUNT) break;
+        combined.push({ ...card, id: combined.length + 1 });
+      }
+
+      return combined.slice(0, FLASHCARD_COUNT);
+    }
+
+    console.log("AI produced < 3 cards, using full fallback");
+    return buildFlashcardFallback(trimmedTranscript, unitTitle);
+  } catch (err) {
+    console.error("Flashcard generation error:", err);
+    return buildFlashcardFallback(
+      (transcript ?? "").slice(0, 1000),
+      unitTitle
+    );
   }
 }
 
@@ -372,7 +555,7 @@ function parseQuizResponse(
     });
   }
 
-  return out.slice(0, QUIZ_COUNT);
+  return out.slice(0, AI_QUIZ_TARGET);
 }
 
 /* ============================== QUIZ FIXERS ============================== */
@@ -457,7 +640,8 @@ function fixQuestionMath(q: GeneratedQuestion): GeneratedQuestion {
   if (placeValueAnswer !== null) {
     const matched =
       options.find(
-        (opt) => normalizeSpace(opt).toLowerCase() === placeValueAnswer.toLowerCase()
+        (opt) =>
+          normalizeSpace(opt).toLowerCase() === placeValueAnswer.toLowerCase()
       ) ||
       options.find((opt) => normalizeSpace(opt).includes(placeValueAnswer));
 
@@ -659,6 +843,15 @@ function getFallbackQuizForTopic(topic: string): GeneratedQuestion[] {
   return getGenericFallback(topic);
 }
 
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 function fillQuizWithFallbacks(
   items: GeneratedQuestion[],
   topic: string
@@ -666,7 +859,7 @@ function fillQuizWithFallbacks(
   const clean = postProcessGeneratedQuestions(items, topic);
   if (clean.length >= QUIZ_COUNT) return clean.slice(0, QUIZ_COUNT);
 
-  const fallback = getFallbackQuizForTopic(topic);
+  const fallback = shuffle(getFallbackQuizForTopic(topic));
   const combined = [...clean];
   const seen = new Set(
     combined.map((q) => normalizeSpace(q.question).toLowerCase())
@@ -714,7 +907,7 @@ export async function callAI(history: Message[]): Promise<Message> {
     return {
       id: "err",
       role: "assistant",
-      content: "AI isn’t ready. Tap Retry to fix me.",
+      content: "AI isn't ready. Tap Retry to fix me.",
     };
   }
 
@@ -751,6 +944,9 @@ export async function callAI(history: Message[]): Promise<Message> {
     try {
       const engine = await getContext("gemma2b");
 
+      const startTime = Date.now();
+      console.log("AI response started at:", startTime);
+
       const { text } = await engine.completion({
         prompt: formatMessagesForGemma(history.slice(-4)),
         n_predict: 520,
@@ -758,6 +954,13 @@ export async function callAI(history: Message[]): Promise<Message> {
         top_p: 0.9,
         stop: ["<end_of_turn>", "<eos>"],
       });
+
+      const endTime = Date.now();
+      const responseTime = endTime - startTime;
+
+      console.warn("AI response ended at:", endTime);
+      console.warn("AI response time:", responseTime, "ms");
+      console.warn(`AI response time: ${(responseTime / 1000).toFixed(2)} seconds`);
 
       const cleaned = cleanGemmaOutput(text);
 
@@ -776,7 +979,6 @@ export async function callAI(history: Message[]): Promise<Message> {
 
   return inflight;
 }
-
 /* ============================== UTILS ============================== */
 
 export async function warmupAI(): Promise<void> {

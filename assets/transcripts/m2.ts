@@ -3,60 +3,53 @@
 export const m2Transcript = `
 Welcome to Addition and Subtraction with Place Value.
 
-Today we will learn how place value helps us add and subtract numbers.
-
-Understanding place value makes solving bigger math problems easier.
+Place value helps us add and subtract numbers correctly.
 
 ----------------------------------
-UNDERSTANDING PLACE VALUE WHEN ADDING
+ADDING WITH PLACE VALUE
 ----------------------------------
 
-When we add numbers, we add digits that are in the same place.
+When adding numbers, we add digits in the same place.
 
-That means:
-• Ones are added with ones.
-• Tens are added with tens.
-• Hundreds are added with hundreds.
+• Ones add with ones  
+• Tens add with tens  
+• Hundreds add with hundreds  
 
 Example:
 
 23 + 14
 
-First add the ones:
+Add ones:  
 3 + 4 = 7
 
-Then add the tens:
+Add tens:  
 2 tens + 1 ten = 3 tens
 
-So the answer is:
-37
+Answer: 37
 
 ----------------------------------
 ADDING MULTI-DIGIT NUMBERS
 ----------------------------------
 
-When adding multi-digit numbers, we start from the ones place.
+Start adding from the ones place.
 
 Example:
 
 34 + 25
 
-Step 1: Add the ones  
+Add ones:  
 4 + 5 = 9
 
-Step 2: Add the tens  
+Add tens:  
 3 tens + 2 tens = 5 tens
 
-Answer:
-59
+Answer: 59
 
 ----------------------------------
 ADDING WITH REGROUPING
 ----------------------------------
 
-Sometimes the ones add up to more than 10.
-
-When this happens, we regroup.
+Sometimes the ones add up to 10 or more.
 
 Regrouping means turning 10 ones into 1 ten.
 
@@ -64,60 +57,56 @@ Example:
 
 27 + 18
 
-Step 1: Add ones  
+Add ones:  
 7 + 8 = 15
 
-15 ones means:
-1 ten and 5 ones
+15 ones = 1 ten and 5 ones.
 
-Write the 5 in the ones place  
-Carry the 1 ten to the tens column
+Write 5 in the ones place and carry 1 ten.
 
-Step 2: Add tens  
+Add tens:  
 2 tens + 1 ten + 1 carried ten = 4 tens
 
-Final answer:
-45
+Answer: 45
 
 ----------------------------------
-UNDERSTANDING PLACE VALUE WHEN SUBTRACTING
+SUBTRACTION WITH PLACE VALUE
 ----------------------------------
 
 Subtraction also follows place value.
 
-We subtract ones from ones and tens from tens.
+• Ones subtract from ones  
+• Tens subtract from tens  
 
 Example:
 
 45 − 23
 
-Step 1: Subtract ones  
+Subtract ones:  
 5 − 3 = 2
 
-Step 2: Subtract tens  
+Subtract tens:  
 4 tens − 2 tens = 2 tens
 
-Answer:
-22
+Answer: 22
 
 ----------------------------------
 SUBTRACTING MULTI-DIGIT NUMBERS
 ----------------------------------
 
-We also start subtracting from the ones place.
+Start subtracting from the ones place.
 
 Example:
 
 67 − 24
 
-Step 1: Subtract ones  
+Subtract ones:  
 7 − 4 = 3
 
-Step 2: Subtract tens  
+Subtract tens:  
 6 tens − 2 tens = 4 tens
 
-Answer:
-43
+Answer: 43
 
 ----------------------------------
 SUBTRACTING WITH REGROUPING
@@ -125,39 +114,31 @@ SUBTRACTING WITH REGROUPING
 
 Sometimes the top digit is smaller than the bottom digit.
 
-In that case, we regroup from the tens place.
+Then we regroup by borrowing from the tens place.
 
 Example:
 
 52 − 38
 
-Step 1: Look at the ones  
-2 is smaller than 8
+2 is smaller than 8, so regroup.
 
-So we regroup.
+52 becomes 4 tens and 12 ones.
 
-Borrow 1 ten from the tens place.
-
-52 becomes:
-4 tens and 12 ones.
-
-Step 2: Subtract ones  
+Subtract ones:  
 12 − 8 = 4
 
-Step 3: Subtract tens  
+Subtract tens:  
 4 tens − 3 tens = 1 ten
 
-Final answer:
-14
+Answer: 14
 
 ----------------------------------
-REMEMBER
+KEY IDEA
 ----------------------------------
 
-• Add and subtract starting from the ones place.
-• Ones combine with ones.
-• Tens combine with tens.
-• Regrouping helps when numbers are too big or too small.
+• Start from the ones place.  
+• Ones work with ones, tens with tens.  
+• Regroup when needed.
 
-Understanding place value makes addition and subtraction easier and helps us solve bigger math problems.
+Place value helps us solve addition and subtraction problems accurately.
 `;
