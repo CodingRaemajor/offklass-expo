@@ -485,6 +485,7 @@ export default function Flashcards() {
     unitTitles[0] ?? "Unit 1: Place Value"
   );
   const [isGenerating, setIsGenerating] = useState(false);
+  const [hasGeneratedDeck, setHasGeneratedDeck] = useState(false);
   const [deckSource, setDeckSource] = useState<"ai" | "fallback" | "seed">("seed");
 
   const [completed, setCompleted] = useState<string[]>([]);
@@ -567,15 +568,13 @@ export default function Flashcards() {
 
       if (!cancelled) {
         setSelectedUnit(firstUnit);
-        await generateDeck(firstUnit);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [unitTitles]);
 
   const currentCard = cards[current] ?? null;
   const points = correct * 10 + bestStreak * 5 + (isFinished ? 25 : 0);
@@ -724,6 +723,7 @@ export default function Flashcards() {
     if (isGenerating) return;
 
     try {
+      setHasGeneratedDeck(true);
       setIsGenerating(true);
 
       const transcript = getTranscriptForUnit(unit);
@@ -888,7 +888,15 @@ export default function Flashcards() {
             </View>
           </View>
 
-          {isGenerating ? (
+          {!hasGeneratedDeck ? (
+            <View style={s.loaderCard}>
+              <Ionicons name="albums-outline" size={42} color="#5B35F2" />
+              <Text style={s.loaderTitle}>{T.unitTitle}</Text>
+              <Text style={s.loaderSub}>
+                Select a unit or topic first, then tap "{T.generateDeck}".
+              </Text>
+            </View>
+          ) : isGenerating ? (
             <View style={s.loaderCard}>
               <ActivityIndicator size="large" color="#5B35F2" />
               <Text style={s.loaderTitle}>{T.generatingDeck}</Text>

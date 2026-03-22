@@ -104,8 +104,7 @@ const L10N: Record<
     title: "Offklass ساتھی",
     subtitle: "آئیے مل کر سیکھتے ہیں!",
     placeholder: "کچھ پوچھیں...",
-    greeting:
-      "سلام! میں آپ کا Offklass ٹیچر ہوں۔ اپنی جماعت بتائیں۔",
+    greeting: "سلام! میں آپ کا Offklass ٹیچر ہوں۔ اپنی جماعت بتائیں۔",
     aiBusy: "اے آئی مصروف ہے۔ دوبارہ کوشش کریں!",
     fallback: "میں جواب نہیں سوچ سکا۔",
     tipLabel: "آئیڈیاز",
@@ -153,19 +152,37 @@ const KidBackground = () => (
     <View
       style={[
         styles.blob,
-        { top: -50, right: -50, backgroundColor: "#DBEAFE", width: 220, height: 220 },
+        {
+          top: -50,
+          right: -50,
+          backgroundColor: "#DBEAFE",
+          width: 220,
+          height: 220,
+        },
       ]}
     />
     <View
       style={[
         styles.blob,
-        { bottom: 110, left: -70, backgroundColor: "#EDE9FE", width: 170, height: 170 },
+        {
+          bottom: 110,
+          left: -70,
+          backgroundColor: "#EDE9FE",
+          width: 170,
+          height: 170,
+        },
       ]}
     />
     <View
       style={[
         styles.blob,
-        { top: "42%", right: -35, backgroundColor: "#FEF3C7", width: 90, height: 90 },
+        {
+          top: "42%",
+          right: -35,
+          backgroundColor: "#FEF3C7",
+          width: 90,
+          height: 90,
+        },
       ]}
     />
   </View>
@@ -179,9 +196,11 @@ class ErrorBoundary extends React.Component<
     super(props);
     this.state = {};
   }
+
   static getDerivedStateFromError(err: any) {
     return { err };
   }
+
   render() {
     if (this.state.err) {
       return (
@@ -197,6 +216,7 @@ class ErrorBoundary extends React.Component<
         </SafeAreaView>
       );
     }
+
     return this.props.children;
   }
 }
@@ -248,6 +268,7 @@ function getTips(_lang: Lang): TipItem[] {
 
 export default function OffklassAI() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const messagesRef = useRef<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const listRef = useRef<FlatList<Message>>(null);
@@ -258,7 +279,10 @@ export default function OffklassAI() {
   const T = useMemo(() => L10N[lang] ?? L10N.English, [lang]);
   const isRTL = lang === "اردو";
   const rtl = isRTL
-    ? ({ writingDirection: "rtl" as const, textAlign: "right" as const } as const)
+    ? ({
+        writingDirection: "rtl" as const,
+        textAlign: "right" as const,
+      } as const)
     : undefined;
 
   const router = useRouter();
@@ -283,6 +307,7 @@ export default function OffklassAI() {
     setTipOpen(true);
     tipFade.setValue(0);
     tipScale.setValue(0.9);
+
     Animated.parallel([
       Animated.timing(tipFade, {
         toValue: 1,
@@ -300,9 +325,11 @@ export default function OffklassAI() {
   }
 
   function closeTips() {
-    Animated.timing(tipFade, { toValue: 0, duration: 150, useNativeDriver: true }).start(() =>
-      setTipOpen(false)
-    );
+    Animated.timing(tipFade, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start(() => setTipOpen(false));
   }
 
   function applyTip(text: string) {
@@ -310,6 +337,7 @@ export default function OffklassAI() {
       const base = prev.trim();
       return base ? `${base}\n\n${text}` : text;
     });
+
     closeTips();
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
     setTimeout(() => inputRef.current?.focus(), 120);
@@ -320,7 +348,6 @@ export default function OffklassAI() {
 
   useEffect(() => {
     const unsub = subscribeAIStatus(() => setAi(getAIStatus()));
-    // start preparing immediately when tab opens
     prepareAI().catch(() => {});
     return () => {
       unsub();
@@ -338,10 +365,16 @@ export default function OffklassAI() {
   }
 
   useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
     (async () => {
       const ob = await loadJSON<OnboardingData | null>(ONBOARD_KEY, null);
       const savedLang = (ob?.language as Lang) || "English";
-      setLang((LANGS as readonly string[]).includes(savedLang) ? savedLang : "English");
+      setLang(
+        (LANGS as readonly string[]).includes(savedLang) ? savedLang : "English"
+      );
 
       const greet: Message = {
         id: "greet1",
@@ -352,15 +385,21 @@ export default function OffklassAI() {
       const saved = await loadJSON<unknown>(STORE_KEY, [greet]);
       const arr = Array.isArray(saved) ? (saved as any[]) : [greet];
 
-      setMessages(
-        arr
-          .map((m) => ({
-            id: String(m?.id ?? Date.now()),
-            role: m?.role === "user" || m?.role === "assistant" ? m.role : "assistant",
-            content: typeof m?.content === "string" ? m.content : JSON.stringify(m?.content ?? ""),
-          }))
-          .slice(-120)
-      );
+      const normalizedMessages = arr
+        .map((m) => ({
+          id: String(m?.id ?? Date.now()),
+          role:
+            m?.role === "user" || m?.role === "assistant"
+              ? m.role
+              : "assistant",
+          content:
+            typeof m?.content === "string"
+              ? m.content
+              : JSON.stringify(m?.content ?? ""),
+        }))
+        .slice(-120) as Message[];
+
+      setMessages(normalizedMessages);
 
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 120);
     })();
@@ -371,11 +410,20 @@ export default function OffklassAI() {
   }, [messages]);
 
   useEffect(() => {
-    if (!params.question || lastQuestionRef.current === params.question || input.trim().length > 0) return;
+    if (
+      !params.question ||
+      lastQuestionRef.current === params.question ||
+      input.trim().length > 0
+    ) {
+      return;
+    }
+
     lastQuestionRef.current = params.question as string;
 
     const lines = [
-      `I'm working on ${params.from === "flashcard" ? "this flashcard" : "this quiz question"} and need help:`,
+      `I'm working on ${
+        params.from === "flashcard" ? "this flashcard" : "this quiz question"
+      } and need help:`,
       "",
       `Question: ${params.question}`,
       `My answer: ${params.userAnswer || "(I'm not sure)"}`,
@@ -383,18 +431,25 @@ export default function OffklassAI() {
       "",
       "Please explain step by step in a simple way for my grade level. Also show common mistakes and a quick way to check the answer.",
     ];
+
     setInput(lines.filter((l) => l !== "").join("\n"));
 
     setTimeout(() => {
       listRef.current?.scrollToEnd({ animated: true });
       inputRef.current?.focus();
     }, 160);
-  }, [params.question]);
+  }, [params.question, params.from, params.userAnswer, params.correctAnswer, input]);
 
-  function replaceTypingBubbleWith(text: string) {
-    setMessages((m) =>
-      m.map((msg) =>
-        msg.id.endsWith("-typing") ? { ...msg, id: String(Date.now()), content: text } : msg
+  function replaceTypingBubbleWith(text: string, typingId?: string) {
+    setMessages((current) =>
+      current.map((msg) =>
+        typingId
+          ? msg.id === typingId
+            ? { ...msg, id: String(Date.now()), content: text }
+            : msg
+          : msg.id.endsWith("-typing")
+          ? { ...msg, id: String(Date.now()), content: text }
+          : msg
       )
     );
   }
@@ -402,25 +457,56 @@ export default function OffklassAI() {
   async function onSend() {
     const text = input.trim();
     if (!text || sending) return;
-
-    // ✅ HARD GATE: don't send while downloading/loading/error
     if (!isReady) return;
 
     setInput("");
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: text };
 
-    setMessages((m) => [...m, userMsg, { id: `${Date.now()}-typing`, role: "assistant", content: "..." }]);
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: text,
+    };
+
+    const typingId = `${Date.now()}-typing`;
+
+    setMessages((m) => [
+      ...m,
+      userMsg,
+      {
+        id: typingId,
+        role: "assistant",
+        content: "Analyzing the question... 🤔",
+      },
+    ]);
+
     setSending(true);
-
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
 
+    const stageTimer = setTimeout(() => {
+      setMessages((m) =>
+        m.map((msg) =>
+          msg.id === typingId
+            ? { ...msg, content: "Generating response... ✍️" }
+            : msg
+        )
+      );
+    }, 1200);
+
     try {
-      const reply = await callAI([...messages.slice(-4), userMsg]);
+      const contextMessages = [...messagesRef.current.slice(-4), userMsg];
+      const reply = await callAI(contextMessages);
+
+      clearTimeout(stageTimer);
+
       const content =
-        typeof reply?.content === "string" && reply.content.trim().length ? reply.content.trim() : T.fallback;
-      replaceTypingBubbleWith(content);
+        typeof reply?.content === "string" && reply.content.trim().length
+          ? reply.content.trim()
+          : T.fallback;
+
+      replaceTypingBubbleWith(content, typingId);
     } catch {
-      replaceTypingBubbleWith(T.aiBusy);
+      clearTimeout(stageTimer);
+      replaceTypingBubbleWith(T.aiBusy, typingId);
     } finally {
       setSending(false);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
@@ -429,21 +515,37 @@ export default function OffklassAI() {
 
   return (
     <ErrorBoundary>
-      <SafeAreaView style={{ flex: 1, backgroundColor: UI.bg }} edges={["top", "left", "right"]}>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: UI.bg }}
+        edges={["top", "left", "right"]}
+      >
         <KidBackground />
 
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardBehavior as any} keyboardVerticalOffset={keyboardOffset}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={keyboardBehavior as any}
+          keyboardVerticalOffset={keyboardOffset}
+        >
           {/* Header */}
           <View style={styles.headerWrap}>
             <View style={styles.headerCard}>
-              <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+              <Pressable
+                onPress={() => router.back()}
+                style={styles.backBtn}
+                hitSlop={10}
+              >
                 <Ionicons name="chevron-back" size={22} color={UI.text} />
               </Pressable>
 
               <View style={{ flex: 1, alignItems: "center" }}>
                 <Text style={[styles.title, rtl]}>{T.title}</Text>
                 <View style={styles.statusBadge}>
-                  <View style={[styles.statusDot, { backgroundColor: isReady ? UI.green : UI.yellow }]} />
+                  <View
+                    style={[
+                      styles.statusDot,
+                      { backgroundColor: isReady ? UI.green : UI.yellow },
+                    ]}
+                  />
                   <Text style={[styles.subtitle, rtl]}>
                     {isReady
                       ? T.subtitle
@@ -471,7 +573,10 @@ export default function OffklassAI() {
             keyExtractor={(m) => m.id}
             renderItem={({ item }) => (
               <View style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
-                <ChatBubble role={item.role === "user" ? "user" : "assistant"} text={item.content} />
+                <ChatBubble
+                  role={item.role === "user" ? "user" : "assistant"}
+                  text={item.content}
+                />
               </View>
             )}
             keyboardShouldPersistTaps="handled"
@@ -489,13 +594,20 @@ export default function OffklassAI() {
                 </View>
               </View>
             }
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+            onContentSizeChange={() =>
+              listRef.current?.scrollToEnd({ animated: true })
+            }
           />
 
           {/* Composer */}
           <View
-            style={[styles.composerOuter, { paddingBottom: Math.max(12, insets.bottom) }]}
-            onLayout={(e) => setComposerH(Math.max(76, Math.ceil(e.nativeEvent.layout.height)))}
+            style={[
+              styles.composerOuter,
+              { paddingBottom: Math.max(12, insets.bottom) },
+            ]}
+            onLayout={(e) =>
+              setComposerH(Math.max(76, Math.ceil(e.nativeEvent.layout.height)))
+            }
           >
             <View style={styles.composerCard}>
               <TextInput
@@ -509,7 +621,7 @@ export default function OffklassAI() {
                 multiline
                 returnKeyType="send"
                 blurOnSubmit={false}
-                editable={isReady} // ✅ lock typing until ready (prevents kids confusion)
+                editable={isReady}
                 onSubmitEditing={() => {
                   if (input.trim().length) onSend();
                 }}
@@ -526,21 +638,39 @@ export default function OffklassAI() {
                   (sending || !input.trim() || !isReady) && { opacity: 0.5 },
                 ]}
               >
-                {sending ? <ActivityIndicator color="#fff" /> : <Ionicons name="paw" size={20} color="#fff" />}
+                {sending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Ionicons name="paw" size={20} color="#fff" />
+                )}
               </Pressable>
             </View>
           </View>
 
           {/* Tips Modal */}
-          <Modal visible={tipOpen} transparent animationType="fade" onRequestClose={closeTips}>
+          <Modal
+            visible={tipOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={closeTips}
+          >
             <Pressable style={styles.tipBackdrop} onPress={closeTips}>
-              <Animated.View style={[styles.tipModal, { opacity: tipFade, transform: [{ scale: tipScale }] }]}>
+              <Animated.View
+                style={[
+                  styles.tipModal,
+                  { opacity: tipFade, transform: [{ scale: tipScale }] },
+                ]}
+              >
                 <Text style={styles.tipTitle}>{T.tipTitle}</Text>
                 <Text style={styles.tipSub}>{T.tipSub}</Text>
 
                 <View style={{ gap: 8, marginTop: 12 }}>
                   {tips.map((t) => (
-                    <Pressable key={t.key} onPress={() => applyTip(t.text)} style={styles.tipRow}>
+                    <Pressable
+                      key={t.key}
+                      onPress={() => applyTip(t.text)}
+                      style={styles.tipRow}
+                    >
                       <Ionicons name={t.icon} size={20} color={UI.purple} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.tipRowTitle}>{t.title}</Text>
@@ -548,7 +678,11 @@ export default function OffklassAI() {
                           {t.text}
                         </Text>
                       </View>
-                      <Ionicons name="add-circle" size={22} color={UI.green} />
+                      <Ionicons
+                        name="add-circle"
+                        size={22}
+                        color={UI.green}
+                      />
                     </Pressable>
                   ))}
                 </View>
@@ -573,18 +707,27 @@ export default function OffklassAI() {
 
                 {ai.aiState === "downloading" && (
                   <Text style={styles.aiGateSub}>
-                    {ai.aiProgress ? `${ai.aiProgress.percent.toFixed(1)}%` : "Starting download…"}
+                    {ai.aiProgress
+                      ? `${ai.aiProgress.percent.toFixed(1)}%`
+                      : "Starting download…"}
                   </Text>
                 )}
 
                 {ai.aiState === "loading" && (
-                  <Text style={styles.aiGateSub}>Almost ready! Please wait…</Text>
+                  <Text style={styles.aiGateSub}>
+                    Almost ready! Please wait…
+                  </Text>
                 )}
 
                 {ai.aiState === "error" && (
                   <>
-                    <Text style={styles.aiGateSub}>{ai.aiError ?? "Something went wrong."}</Text>
-                    <Pressable onPress={() => prepareAI().catch(() => {})} style={styles.retryBtn}>
+                    <Text style={styles.aiGateSub}>
+                      {ai.aiError ?? "Something went wrong."}
+                    </Text>
+                    <Pressable
+                      onPress={() => prepareAI().catch(() => {})}
+                      style={styles.retryBtn}
+                    >
                       <Ionicons name="refresh" size={18} color="#fff" />
                       <Text style={styles.retryText}>Retry</Text>
                     </Pressable>
@@ -626,8 +769,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
   },
   title: { fontSize: 18, fontWeight: "900", color: UI.text },
-  statusBadge: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
-  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: UI.green },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: UI.green,
+  },
   subtitle: { fontSize: 11, fontWeight: "800", color: UI.subtext },
 
   tipPill: {
@@ -641,7 +794,13 @@ const styles = StyleSheet.create({
 
   listContent: { flexGrow: 1, paddingTop: 6 },
 
-  emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", marginTop: 90, paddingHorizontal: 16 },
+  emptyWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 90,
+    paddingHorizontal: 16,
+  },
   emptyCard: {
     backgroundColor: UI.card,
     padding: 28,
@@ -656,8 +815,20 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 8 },
   },
-  emptyTitle: { fontSize: 20, fontWeight: "900", color: UI.text, marginTop: 10 },
-  emptyHint: { fontSize: 14, color: UI.subtext, textAlign: "center", marginTop: 6, lineHeight: 20, fontWeight: "700" },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: UI.text,
+    marginTop: 10,
+  },
+  emptyHint: {
+    fontSize: 14,
+    color: UI.subtext,
+    textAlign: "center",
+    marginTop: 6,
+    lineHeight: 20,
+    fontWeight: "700",
+  },
 
   composerOuter: { paddingHorizontal: 16, backgroundColor: "transparent" },
   composerCard: {
@@ -697,10 +868,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  tipBackdrop: { flex: 1, backgroundColor: "rgba(30,41,59,0.4)", justifyContent: "center", padding: 20 },
-  tipModal: { backgroundColor: "#fff", borderRadius: 30, padding: 22, elevation: 20 },
+  tipBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(30,41,59,0.4)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  tipModal: {
+    backgroundColor: "#fff",
+    borderRadius: 30,
+    padding: 22,
+    elevation: 20,
+  },
   tipTitle: { fontSize: 18, fontWeight: "900", color: UI.text },
-  tipSub: { fontSize: 12, fontWeight: "800", color: UI.subtext, marginTop: 4 },
+  tipSub: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: UI.subtext,
+    marginTop: 4,
+  },
 
   tipRow: {
     flexDirection: "row",
@@ -713,9 +899,14 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.05)",
   },
   tipRowTitle: { fontSize: 15, fontWeight: "900", color: UI.text },
-  tipRowText: { fontSize: 12, fontWeight: "700", color: UI.subtext, marginTop: 2, lineHeight: 16 },
+  tipRowText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: UI.subtext,
+    marginTop: 2,
+    lineHeight: 16,
+  },
 
-  // ✅ AI Gate overlay styles
   aiGate: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(240,247,255,0.75)",
