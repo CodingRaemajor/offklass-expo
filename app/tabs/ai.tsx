@@ -17,14 +17,9 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+
 import ChatBubble from "../../components/ChatBubble";
-import {
-  callAI,
-  prepareAI,
-  getAIStatus,
-  subscribeAIStatus,
-  type Message,
-} from "../../lib/ai.local";
+import { callAI, prepareAI, type Message } from "../../lib/ai.local";
 import {
   loadJSON,
   saveJSON,
@@ -32,13 +27,11 @@ import {
   type OnboardingData,
 } from "../../lib/storage";
 
-/* --------------------------- Playful “Kid Teacher” UI --------------------------- */
+/* --------------------------- Theme --------------------------- */
 
 const UI = {
   bg: "#F0F7FF",
-  bgAccent: "#E0E7FF",
-  card: "rgba(255,255,255,0.95)",
-  border: "rgba(0,0,0,0.05)",
+  card: "rgba(255,255,255,0.96)",
   text: "#1E293B",
   subtext: "#64748B",
   muted: "#94A3B8",
@@ -63,83 +56,110 @@ const L10N: Record<
     greeting: string;
     aiBusy: string;
     fallback: string;
-
-    tipLabel: string;
     tipTitle: string;
     tipSub: string;
-
     startTitle: string;
     startHint: string;
+    localMode: string;
+    sending: string;
+    analyzing: string;
+    generating: string;
   }
 > = {
   English: {
     title: "Offklass Buddy",
-    subtitle: "Let's learn together!",
-    placeholder: "Ask me anything...",
+    subtitle: "Let’s learn together!",
+    placeholder:
+      "Ask about place value, addition, subtraction, multiplication, or division...",
     greeting:
-      "Hi there! 👋 I'm your Offklass Buddy. Tell me your grade and what we're learning today!",
-    aiBusy: "Oops! I'm thinking too hard. Try again!",
-    fallback: "I couldn't find the answer. Let's try another way!",
-    tipLabel: "Ideas",
+      "Hi there! 👋 I’m your Offklass Buddy. Ask me about your lesson and I’ll answer from the local lesson library.",
+    aiBusy: "Something went wrong. Please try again!",
+    fallback:
+      "I couldn’t find that in my lesson library yet. Try another math question.",
     tipTitle: "Learning Boosters",
-    tipSub: "Tap to add to your message!",
+    tipSub: "Tap one to add it to your message.",
     startTitle: "Ready to Start?",
-    startHint: "Tell me your grade + topic. I’ll make it super easy!",
+    startHint: "Ask about a unit, topic, flashcard, or quiz question.",
+    localMode: "Instant lesson library",
+    sending: "Sending...",
+    analyzing: "Analyzing the question... 🤔",
+    generating: "Finding the best answer... ✍️",
   },
   नेपाली: {
     title: "Offklass साथी",
     subtitle: "सँगै सिकौं!",
-    placeholder: "केही सोध्नुहोस्...",
+    placeholder:
+      "place value, addition, subtraction, multiplication, division बारे सोध्नुहोस्...",
     greeting:
-      "नमस्ते! म Offklass शिक्षक हुँ। आफ्नो कक्षा र आज के सिक्न चाहनुहुन्छ भन्नुहोस्।",
-    aiBusy: "एआई व्यस्त छ। फेरि प्रयास गर्नुहोस्!",
-    fallback: "म जवाफ सोच्न सकिनँ।",
-    tipLabel: "टिप",
-    tipTitle: "छिटो टिप्स",
-    tipSub: "टिप ट्याप गर्दा मेसेजमा टाँसिन्छ।",
-    startTitle: "सिकाइ सुरु गर्नुहोस्",
-    startHint: "आफ्नो कक्षा + विषय भन्नुहोस्।",
+      "नमस्ते! म तपाईंको Offklass साथी हुँ। पाठको बारेमा सोध्नुहोस्, म लोकल lesson library बाट उत्तर दिनेछु।",
+    aiBusy: "केही समस्या भयो। फेरि प्रयास गर्नुहोस्!",
+    fallback:
+      "यो उत्तर मेरो lesson library मा भेटिएन। अर्को math question सोध्नुहोस्।",
+    tipTitle: "Learning Boosters",
+    tipSub: "ट्याप गर्दा सन्देशमा थपिन्छ।",
+    startTitle: "सुरु गर्न तयार?",
+    startHint: "युनिट, विषय, फ्ल्यासकार्ड, वा क्विज प्रश्न सोध्नुहोस्।",
+    localMode: "तुरुन्त lesson library",
+    sending: "पठाउँदै...",
+    analyzing: "प्रश्न हेरिँदैछ... 🤔",
+    generating: "सबैभन्दा राम्रो उत्तर खोजिँदैछ... ✍️",
   },
   اردو: {
     title: "Offklass ساتھی",
-    subtitle: "آئیے مل کر سیکھتے ہیں!",
-    placeholder: "کچھ پوچھیں...",
-    greeting: "سلام! میں آپ کا Offklass ٹیچر ہوں۔ اپنی جماعت بتائیں۔",
-    aiBusy: "اے آئی مصروف ہے۔ دوبارہ کوشش کریں!",
-    fallback: "میں جواب نہیں سوچ سکا۔",
-    tipLabel: "آئیڈیاز",
-    tipTitle: "فوری ٹپس",
-    tipSub: "ٹپ پر ٹیپ کریں—پیغام میں آ جائے گا۔",
-    startTitle: "سیکھنا شروع کریں",
-    startHint: "اپنی جماعت + ٹاپک بتائیں۔",
+    subtitle: "آؤ مل کر سیکھیں!",
+    placeholder:
+      "place value, addition, subtraction, multiplication, division کے بارے میں پوچھیں...",
+    greeting:
+      "سلام! میں آپ کا Offklass ساتھی ہوں۔ سبق کے بارے میں پوچھیں، میں لوکل lesson library سے جواب دوں گا۔",
+    aiBusy: "کچھ مسئلہ ہو گیا۔ دوبارہ کوشش کریں!",
+    fallback:
+      "یہ جواب میری lesson library میں نہیں ملا۔ ایک اور math question پوچھیں۔",
+    tipTitle: "Learning Boosters",
+    tipSub: "ٹیپ کریں، پیغام میں شامل ہو جائے گا۔",
+    startTitle: "شروع کرنے کے لیے تیار؟",
+    startHint: "یونٹ، ٹاپک، فلیش کارڈ یا کوئز سوال پوچھیں۔",
+    localMode: "فوری lesson library",
+    sending: "بھیجا جا رہا ہے...",
+    analyzing: "سوال دیکھا جا رہا ہے... 🤔",
+    generating: "بہترین جواب تلاش کیا جا رہا ہے... ✍️",
   },
   বাংলা: {
     title: "Offklass বন্ধু",
     subtitle: "চলো একসাথে শিখি!",
-    placeholder: "কিছু জিজ্ঞাসা করো...",
+    placeholder:
+      "place value, addition, subtraction, multiplication, division নিয়ে জিজ্ঞেস করো...",
     greeting:
-      "হাই! আমি আপনার Offklass শিক্ষক। আপনার ক্লাস ও আজ কী শিখতে চান বলুন।",
-    aiBusy: "এআই ব্যস্ত। আবার চেষ্টা করুন!",
-    fallback: "আমি উত্তর ভাবতে পারিনি।",
-    tipLabel: "টিপস",
-    tipTitle: "দ্রুত টিপস",
-    tipSub: "টিপ ট্যাপ করলে মেসেজে বসে যাবে।",
-    startTitle: "শেখা শুরু করুন",
-    startHint: "আপনার ক্লাস + টপিক বলুন।",
+      "হাই! আমি তোমার Offklass বন্ধু। লেসনের বিষয়ে জিজ্ঞেস করো, আমি লোকাল lesson library থেকে উত্তর দেব।",
+    aiBusy: "কিছু সমস্যা হয়েছে। আবার চেষ্টা করো!",
+    fallback:
+      "এটা আমার lesson library-তে পাওয়া যায়নি। আরেকটা math question জিজ্ঞেস করো।",
+    tipTitle: "Learning Boosters",
+    tipSub: "ট্যাপ করলে মেসেজে যোগ হবে।",
+    startTitle: "শুরু করতে প্রস্তুত?",
+    startHint: "ইউনিট, টপিক, ফ্ল্যাশকার্ড বা কুইজ প্রশ্ন জিজ্ঞেস করো।",
+    localMode: "ইনস্ট্যান্ট lesson library",
+    sending: "পাঠানো হচ্ছে...",
+    analyzing: "প্রশ্ন দেখা হচ্ছে... 🤔",
+    generating: "সেরা উত্তর খোঁজা হচ্ছে... ✍️",
   },
   हिन्दी: {
     title: "Offklass Buddy",
-    subtitle: "चलो साथ पढ़ते हैं!",
-    placeholder: "कुछ भी पूछो...",
+    subtitle: "चलो साथ पढ़ते हैं!",
+    placeholder:
+      "place value, addition, subtraction, multiplication, division के बारे में पूछो...",
     greeting:
-      "हाय! मैं आपका Offklass Buddy हूँ। अपनी कक्षा और आज क्या सीखना चाहते हैं बताइए।",
-    aiBusy: "AI busy है। फिर से try करें!",
-    fallback: "मैं answer नहीं सोच पाया।",
-    tipLabel: "Ideas",
-    tipTitle: "Quick Tips",
-    tipSub: "Tip पर tap करो—message में paste हो जाएगा।",
-    startTitle: "Start learning",
-    startHint: "Grade + topic बताओ।",
+      "हाय! मैं तुम्हारा Offklass Buddy हूँ। lesson के बारे में पूछो, मैं local lesson library से answer दूँगा।",
+    aiBusy: "कुछ गड़बड़ हो गई। फिर से try करो!",
+    fallback:
+      "यह answer मेरी lesson library में नहीं मिला। दूसरा math question पूछो।",
+    tipTitle: "Learning Boosters",
+    tipSub: "Tap करो, message में add हो जाएगा।",
+    startTitle: "Start करने के लिए ready?",
+    startHint: "Unit, topic, flashcard या quiz question पूछो।",
+    localMode: "Instant lesson library",
+    sending: "Sending...",
+    analyzing: "Question देखा जा रहा है... 🤔",
+    generating: "Best answer ढूँढा जा रहा है... ✍️",
   },
 };
 
@@ -188,6 +208,8 @@ const KidBackground = () => (
   </View>
 );
 
+/* -------------------------- Error Boundary -------------------------- */
+
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { err?: any }
@@ -221,16 +243,16 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-/* -------------------------- Tip content (kid friendly) -------------------------- */
+/* -------------------------- Tip content -------------------------- */
 
 type TipItem = { key: string; title: string; text: string; icon: any };
 
-function getTips(_lang: Lang): TipItem[] {
+function getTips(): TipItem[] {
   return [
     {
       key: "steps",
       title: "Step-by-Step",
-      text: "Explain this step-by-step using simple words for my grade.",
+      text: "Explain this step by step using simple words.",
       icon: "footsteps",
     },
     {
@@ -247,20 +269,20 @@ function getTips(_lang: Lang): TipItem[] {
     },
     {
       key: "check",
-      title: "Check it!",
+      title: "Check It",
       text: "Show a quick way to check the answer.",
       icon: "checkmark-circle",
     },
     {
       key: "quizme",
       title: "Challenge Me",
-      text: "Give me a 3-question mini quiz on this topic!",
+      text: "Give me a 3-question mini quiz on this topic.",
       icon: "trophy",
     },
     {
       key: "simpler",
       title: "Simpler!",
-      text: "Explain it like I'm new to this (super simple).",
+      text: "Explain it in a very simple way.",
       icon: "happy",
     },
   ];
@@ -271,12 +293,15 @@ export default function OffklassAI() {
   const messagesRef = useRef<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [isBooting, setIsBooting] = useState(true);
+
   const listRef = useRef<FlatList<Message>>(null);
   const inputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
 
   const [lang, setLang] = useState<Lang>("English");
   const T = useMemo(() => L10N[lang] ?? L10N.English, [lang]);
+
   const isRTL = lang === "اردو";
   const rtl = isRTL
     ? ({
@@ -291,17 +316,17 @@ export default function OffklassAI() {
     question?: string;
     userAnswer?: string;
     correctAnswer?: string;
+    topic?: string;
   }>();
   const lastQuestionRef = useRef<string | undefined>(undefined);
 
   const [composerH, setComposerH] = useState(80);
 
-  /* ------------------------------ Tip popup state ------------------------------ */
   const [tipOpen, setTipOpen] = useState(false);
   const tipFade = useRef(new Animated.Value(0)).current;
   const tipScale = useRef(new Animated.Value(0.9)).current;
 
-  const tips = useMemo(() => getTips(lang), [lang]);
+  const tips = useMemo(() => getTips(), []);
 
   function openTips() {
     setTipOpen(true);
@@ -343,20 +368,6 @@ export default function OffklassAI() {
     setTimeout(() => inputRef.current?.focus(), 120);
   }
 
-  // ✅ AI STATUS GATE (download -> load -> ready)
-  const [ai, setAi] = useState(getAIStatus());
-
-  useEffect(() => {
-    const unsub = subscribeAIStatus(() => setAi(getAIStatus()));
-    prepareAI().catch(() => {});
-    return () => {
-      unsub();
-    };
-  }, []);
-
-  const isReady = ai.aiState === "ready";
-
-  // ✅ KEYBOARD FIX
   const keyboardBehavior = Platform.OS === "ios" ? "padding" : "height";
   const keyboardOffset = Platform.OS === "ios" ? 0 : Math.max(0, insets.top);
 
@@ -370,8 +381,13 @@ export default function OffklassAI() {
 
   useEffect(() => {
     (async () => {
+      try {
+        await prepareAI();
+      } catch {}
+
       const ob = await loadJSON<OnboardingData | null>(ONBOARD_KEY, null);
       const savedLang = (ob?.language as Lang) || "English";
+
       setLang(
         (LANGS as readonly string[]).includes(savedLang) ? savedLang : "English"
       );
@@ -399,15 +415,18 @@ export default function OffklassAI() {
         }))
         .slice(-120) as Message[];
 
-      setMessages(normalizedMessages);
+      setMessages(normalizedMessages.length ? normalizedMessages : [greet]);
+      setIsBooting(false);
 
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 120);
     })();
   }, []);
 
   useEffect(() => {
-    saveJSON(STORE_KEY, messages);
-  }, [messages]);
+    if (!isBooting) {
+      saveJSON(STORE_KEY, messages);
+    }
+  }, [messages, isBooting]);
 
   useEffect(() => {
     if (
@@ -428,17 +447,25 @@ export default function OffklassAI() {
       `Question: ${params.question}`,
       `My answer: ${params.userAnswer || "(I'm not sure)"}`,
       params.correctAnswer ? `Correct answer: ${params.correctAnswer}` : "",
+      params.topic ? `Topic: ${params.topic}` : "",
       "",
-      "Please explain step by step in a simple way for my grade level. Also show common mistakes and a quick way to check the answer.",
+      "Please explain step by step in a simple way for my grade level.",
     ];
 
-    setInput(lines.filter((l) => l !== "").join("\n"));
+    setInput(lines.filter(Boolean).join("\n"));
 
     setTimeout(() => {
       listRef.current?.scrollToEnd({ animated: true });
       inputRef.current?.focus();
     }, 160);
-  }, [params.question, params.from, params.userAnswer, params.correctAnswer, input]);
+  }, [
+    params.question,
+    params.from,
+    params.userAnswer,
+    params.correctAnswer,
+    params.topic,
+    input,
+  ]);
 
   function replaceTypingBubbleWith(text: string, typingId?: string) {
     setMessages((current) =>
@@ -456,8 +483,7 @@ export default function OffklassAI() {
 
   async function onSend() {
     const text = input.trim();
-    if (!text || sending) return;
-    if (!isReady) return;
+    if (!text || sending || isBooting) return;
 
     setInput("");
 
@@ -475,7 +501,7 @@ export default function OffklassAI() {
       {
         id: typingId,
         role: "assistant",
-        content: "Analyzing the question... 🤔",
+        content: T.analyzing,
       },
     ]);
 
@@ -485,12 +511,10 @@ export default function OffklassAI() {
     const stageTimer = setTimeout(() => {
       setMessages((m) =>
         m.map((msg) =>
-          msg.id === typingId
-            ? { ...msg, content: "Generating response... ✍️" }
-            : msg
+          msg.id === typingId ? { ...msg, content: T.generating } : msg
         )
       );
-    }, 1200);
+    }, 700);
 
     try {
       const contextMessages = [...messagesRef.current.slice(-4), userMsg];
@@ -526,7 +550,6 @@ export default function OffklassAI() {
           behavior={keyboardBehavior as any}
           keyboardVerticalOffset={keyboardOffset}
         >
-          {/* Header */}
           <View style={styles.headerWrap}>
             <View style={styles.headerCard}>
               <Pressable
@@ -540,22 +563,9 @@ export default function OffklassAI() {
               <View style={{ flex: 1, alignItems: "center" }}>
                 <Text style={[styles.title, rtl]}>{T.title}</Text>
                 <View style={styles.statusBadge}>
-                  <View
-                    style={[
-                      styles.statusDot,
-                      { backgroundColor: isReady ? UI.green : UI.yellow },
-                    ]}
-                  />
+                  <View style={[styles.statusDot, { backgroundColor: UI.green }]} />
                   <Text style={[styles.subtitle, rtl]}>
-                    {isReady
-                      ? T.subtitle
-                      : ai.aiState === "downloading"
-                      ? "Downloading AI…"
-                      : ai.aiState === "loading"
-                      ? "Loading AI…"
-                      : ai.aiState === "error"
-                      ? "AI needs retry"
-                      : "Preparing…"}
+                    {isBooting ? T.sending : T.localMode}
                   </Text>
                 </View>
               </View>
@@ -566,7 +576,6 @@ export default function OffklassAI() {
             </View>
           </View>
 
-          {/* Chat */}
           <FlatList
             ref={listRef}
             data={messages}
@@ -599,7 +608,6 @@ export default function OffklassAI() {
             }
           />
 
-          {/* Composer */}
           <View
             style={[
               styles.composerOuter,
@@ -613,7 +621,7 @@ export default function OffklassAI() {
               <TextInput
                 ref={inputRef}
                 style={[styles.input, rtl]}
-                placeholder={isReady ? T.placeholder : "AI is getting ready…"}
+                placeholder={isBooting ? "Loading..." : T.placeholder}
                 placeholderTextColor={UI.muted}
                 value={input}
                 onChangeText={setInput}
@@ -621,7 +629,7 @@ export default function OffklassAI() {
                 multiline
                 returnKeyType="send"
                 blurOnSubmit={false}
-                editable={isReady}
+                editable={!isBooting}
                 onSubmitEditing={() => {
                   if (input.trim().length) onSend();
                 }}
@@ -632,10 +640,10 @@ export default function OffklassAI() {
                   inputRef.current?.focus();
                   onSend();
                 }}
-                disabled={sending || !input.trim() || !isReady}
+                disabled={sending || !input.trim() || isBooting}
                 style={[
                   styles.sendBtn,
-                  (sending || !input.trim() || !isReady) && { opacity: 0.5 },
+                  (sending || !input.trim() || isBooting) && { opacity: 0.5 },
                 ]}
               >
                 {sending ? (
@@ -647,7 +655,6 @@ export default function OffklassAI() {
             </View>
           </View>
 
-          {/* Tips Modal */}
           <Modal
             visible={tipOpen}
             transparent
@@ -689,53 +696,6 @@ export default function OffklassAI() {
               </Animated.View>
             </Pressable>
           </Modal>
-
-          {/* ✅ AI Gate Overlay (download/load/error) */}
-          {!isReady && (
-            <View style={styles.aiGate} pointerEvents="auto">
-              <View style={styles.aiGateCard}>
-                <Ionicons name="sparkles" size={26} color={UI.purple} />
-                <Text style={styles.aiGateTitle}>
-                  {ai.aiState === "downloading"
-                    ? "Downloading your AI Buddy… 🧠"
-                    : ai.aiState === "loading"
-                    ? "Warming up… 🔥"
-                    : ai.aiState === "error"
-                    ? "AI needs help 🛠️"
-                    : "Getting ready…"}
-                </Text>
-
-                {ai.aiState === "downloading" && (
-                  <Text style={styles.aiGateSub}>
-                    {ai.aiProgress
-                      ? `${ai.aiProgress.percent.toFixed(1)}%`
-                      : "Starting download…"}
-                  </Text>
-                )}
-
-                {ai.aiState === "loading" && (
-                  <Text style={styles.aiGateSub}>
-                    Almost ready! Please wait…
-                  </Text>
-                )}
-
-                {ai.aiState === "error" && (
-                  <>
-                    <Text style={styles.aiGateSub}>
-                      {ai.aiError ?? "Something went wrong."}
-                    </Text>
-                    <Pressable
-                      onPress={() => prepareAI().catch(() => {})}
-                      style={styles.retryBtn}
-                    >
-                      <Ionicons name="refresh" size={18} color="#fff" />
-                      <Text style={styles.retryText}>Retry</Text>
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            </View>
-          )}
         </KeyboardAvoidingView>
       </SafeAreaView>
     </ErrorBoundary>
@@ -906,51 +866,4 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 16,
   },
-
-  aiGate: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(240,247,255,0.75)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  aiGateCard: {
-    width: "100%",
-    maxWidth: 420,
-    backgroundColor: "rgba(255,255,255,0.98)",
-    borderRadius: 28,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: "#fff",
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-    alignItems: "center",
-    gap: 10,
-  },
-  aiGateTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: UI.text,
-    textAlign: "center",
-  },
-  aiGateSub: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: UI.subtext,
-    textAlign: "center",
-  },
-  retryBtn: {
-    marginTop: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: UI.purple,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 16,
-  },
-  retryText: { color: "#fff", fontWeight: "900" },
 });
