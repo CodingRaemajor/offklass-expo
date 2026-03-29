@@ -1,177 +1,448 @@
 // lib/quizBank.ts
 
-import { getAllUnits } from "./lessonTranscripts";
-
-/* ============================== TYPES ============================== */
-
-export interface QuizQuestion {
+export interface QuizBankQuestion {
   id: number;
   question: string;
   options: string[];
   correctAnswer: string;
+  topic: string;
   explanation: string;
-  unit: string;
+  difficulty?: "Easy" | "Medium" | "Hard";
+  type?: "AI Quiz" | "Practice";
 }
 
-/* ============================== QUIZ DATA ============================== */
+export const QUIZ_BANK: Record<string, QuizBankQuestion[]> = {
+  "Unit 1: Place Value": [
+    {
+      id: 1,
+      question: "What number is made by 3 hundreds, 4 tens, and 2 ones?",
+      options: ["342", "324", "432", "243"],
+      correctAnswer: "342",
+      topic: "Place Value Basics",
+      explanation: "3 hundreds = 300, 4 tens = 40, and 2 ones = 2. So the number is 342.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 2,
+      question: "What is the value of the digit 5 in 5,281?",
+      options: ["5", "50", "500", "5,000"],
+      correctAnswer: "5,000",
+      topic: "Place Value Basics",
+      explanation: "The 5 is in the thousands place, so its value is 5,000.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 3,
+      question: "Which digit is in the tens place in the number 7,483?",
+      options: ["7", "4", "8", "3"],
+      correctAnswer: "8",
+      topic: "Place Value Basics",
+      explanation: "From right to left: ones = 3, tens = 8, hundreds = 4, thousands = 7.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 4,
+      question: "What is 6,000 + 700 + 20 + 9 written in standard form?",
+      options: ["6,729", "6,792", "6,279", "6,907"],
+      correctAnswer: "6,729",
+      topic: "Place Value Basics",
+      explanation: "Add the place values: 6,000 + 700 + 20 + 9 = 6,729.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 5,
+      question: "Which number has 8 in the hundreds place?",
+      options: ["8,214", "2,841", "4,182", "1,428"],
+      correctAnswer: "4,182",
+      topic: "Finding Place Value",
+      explanation: "In 4,182, the 8 is in the hundreds place.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 6,
+      question: "What is the expanded form of 4,305?",
+      options: [
+        "4,000 + 300 + 5",
+        "4,000 + 30 + 5",
+        "400 + 300 + 5",
+        "4,000 + 300 + 50",
+      ],
+      correctAnswer: "4,000 + 300 + 5",
+      topic: "Expanded Form",
+      explanation: "4 is thousands, 3 is hundreds, 0 tens, and 5 ones.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 7,
+      question: "What is the largest number you can make with digits 4, 9, 2, and 7?",
+      options: ["9,742", "9,724", "7,942", "9,472"],
+      correctAnswer: "9,742",
+      topic: "Creating the Largest Number",
+      explanation: "To make the largest number, put the biggest digits first: 9, 7, 4, 2.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 8,
+      question: "What is the smallest number you can make with digits 6, 1, 8, and 3?",
+      options: ["1,368", "1,386", "1,638", "3,168"],
+      correctAnswer: "1,368",
+      topic: "Creating the Smallest Number",
+      explanation: "To make the smallest number, put the smallest digits first: 1, 3, 6, 8.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 9,
+      question: "In the number 9,064, what does the 0 mean?",
+      options: [
+        "There are no thousands",
+        "There are no hundreds",
+        "There are no tens",
+        "There are no ones",
+      ],
+      correctAnswer: "There are no hundreds",
+      topic: "Place Value Basics",
+      explanation: "The 0 is in the hundreds place, so it means there are no hundreds.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 10,
+      question: "Which number matches 2 thousands, 5 hundreds, 1 ten, and 6 ones?",
+      options: ["2,516", "2,561", "2,156", "2,651"],
+      correctAnswer: "2,516",
+      topic: "Place Value Basics",
+      explanation: "2 thousands = 2,000, 5 hundreds = 500, 1 ten = 10, 6 ones = 6, so 2,516.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+  ],
 
-export const QUIZ_BANK: QuizQuestion[] = [
-  /* ================= UNIT 1 ================= */
-  {
-    id: 1,
-    unit: "Unit 1: Place Value",
-    question: "What is the value of 5 in 352?",
-    options: ["5", "50", "500", "35"],
-    correctAnswer: "50",
-    explanation: "5 is in the tens place, so its value is 50.",
-  },
-  {
-    id: 2,
-    unit: "Unit 1: Place Value",
-    question: "Write 482 in expanded form.",
-    options: ["400 + 80 + 2", "40 + 80 + 2", "400 + 8 + 2", "480 + 2"],
-    correctAnswer: "400 + 80 + 2",
-    explanation: "Each digit is written based on its place value.",
-  },
-  {
-    id: 3,
-    unit: "Unit 1: Place Value",
-    question: "Which place is the digit 7 in 47?",
-    options: ["Ones", "Tens", "Hundreds", "Thousands"],
-    correctAnswer: "Ones",
-    explanation: "The rightmost digit is always the ones place.",
-  },
-  {
-    id: 4,
-    unit: "Unit 1: Place Value",
-    question: "What does the 3 represent in 300?",
-    options: ["3", "30", "300", "3000"],
-    correctAnswer: "300",
-    explanation: "3 is in the hundreds place, so its value is 300.",
-  },
+  "Unit 2: Addition & Subtraction": [
+    {
+      id: 1,
+      question: "What is 245 + 132?",
+      options: ["367", "377", "387", "357"],
+      correctAnswer: "377",
+      topic: "Regrouping and Place Value",
+      explanation: "Add ones, tens, and hundreds: 245 + 132 = 377.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 2,
+      question: "What is 503 - 178?",
+      options: ["325", "335", "315", "345"],
+      correctAnswer: "325",
+      topic: "Regrouping and Place Value",
+      explanation: "Subtract carefully using regrouping: 503 - 178 = 325.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 3,
+      question: "What is 689 + 241?",
+      options: ["930", "920", "940", "931"],
+      correctAnswer: "930",
+      topic: "Addition Basics",
+      explanation: "689 + 241 = 930.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 4,
+      question: "What is 700 - 256?",
+      options: ["444", "454", "434", "446"],
+      correctAnswer: "444",
+      topic: "Subtraction Basics",
+      explanation: "Subtract 256 from 700 using regrouping to get 444.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 5,
+      question: "Which equation equals 615?",
+      options: ["400 + 205", "500 + 115", "600 + 15", "610 + 15"],
+      correctAnswer: "600 + 15",
+      topic: "Addition Basics",
+      explanation: "600 + 15 = 615.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 6,
+      question: "What is 356 + 489?",
+      options: ["845", "835", "854", "849"],
+      correctAnswer: "845",
+      topic: "Regrouping and Place Value",
+      explanation: "356 + 489 = 845.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 7,
+      question: "What is 900 - 467?",
+      options: ["433", "423", "443", "434"],
+      correctAnswer: "433",
+      topic: "Regrouping and Place Value",
+      explanation: "900 - 467 = 433.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 8,
+      question: "A student had 128 stickers and got 57 more. How many stickers now?",
+      options: ["175", "185", "195", "165"],
+      correctAnswer: "185",
+      topic: "Word Problems",
+      explanation: "Since the student got more stickers, add: 128 + 57 = 185.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 9,
+      question: "A box had 450 crayons. 126 were used. How many are left?",
+      options: ["334", "324", "314", "344"],
+      correctAnswer: "324",
+      topic: "Word Problems",
+      explanation: "Since crayons were used, subtract: 450 - 126 = 324.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 10,
+      question: "Which answer is correct for 278 + 145?",
+      options: ["413", "423", "433", "443"],
+      correctAnswer: "423",
+      topic: "Addition Basics",
+      explanation: "278 + 145 = 423.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+  ],
 
-  /* ================= UNIT 2 ================= */
-  {
-    id: 5,
-    unit: "Unit 2: Addition & Subtraction",
-    question: "What is 27 + 15?",
-    options: ["32", "42", "41", "37"],
-    correctAnswer: "42",
-    explanation: "Add ones (7+5=12), carry 1, then add tens.",
-  },
-  {
-    id: 6,
-    unit: "Unit 2: Addition & Subtraction",
-    question: "What is 52 - 19?",
-    options: ["33", "31", "43", "29"],
-    correctAnswer: "33",
-    explanation: "Regroup 52 into 3 tens and 12 ones, then subtract.",
-  },
-  {
-    id: 7,
-    unit: "Unit 2: Addition & Subtraction",
-    question: "What does regrouping mean?",
-    options: [
-      "Changing numbers randomly",
-      "Moving value between places",
-      "Adding without thinking",
-      "Guessing answers",
-    ],
-    correctAnswer: "Moving value between places",
-    explanation: "Regrouping shifts value from tens to ones or vice versa.",
-  },
-  {
-    id: 8,
-    unit: "Unit 2: Addition & Subtraction",
-    question: "What is 34 + 28?",
-    options: ["52", "62", "60", "58"],
-    correctAnswer: "62",
-    explanation: "Add ones (4+8=12), carry 1, then add tens.",
-  },
+  "Unit 3: Multiplication": [
+    {
+      id: 1,
+      question: "What is 4 × 6?",
+      options: ["20", "24", "28", "18"],
+      correctAnswer: "24",
+      topic: "Multiplication Concepts",
+      explanation: "4 groups of 6 make 24.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 2,
+      question: "What is 7 × 8?",
+      options: ["54", "56", "48", "64"],
+      correctAnswer: "56",
+      topic: "Multiplication Concepts",
+      explanation: "7 times 8 equals 56.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 3,
+      question: "What is 12 × 3?",
+      options: ["26", "36", "33", "39"],
+      correctAnswer: "36",
+      topic: "Multiplication Concepts",
+      explanation: "12 groups of 3 = 36.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 4,
+      question: "What is 15 × 4?",
+      options: ["45", "50", "60", "55"],
+      correctAnswer: "60",
+      topic: "Multiplication Concepts",
+      explanation: "15 times 4 = 60.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 5,
+      question: "What is 23 × 2?",
+      options: ["44", "46", "48", "42"],
+      correctAnswer: "46",
+      topic: "Area Models and Partial Products",
+      explanation: "23 × 2 = 46.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 6,
+      question: "What is 14 × 6?",
+      options: ["74", "84", "94", "64"],
+      correctAnswer: "84",
+      topic: "Multiplication Concepts",
+      explanation: "14 times 6 = 84.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 7,
+      question: "Which shows 3 × 12 using partial products?",
+      options: ["3 × 10 + 3 × 2 = 36", "3 × 10 + 3 × 3 = 39", "3 × 12 = 26", "30 + 2 = 32"],
+      correctAnswer: "3 × 10 + 3 × 2 = 36",
+      topic: "Area Models and Partial Products",
+      explanation: "Break 12 into 10 and 2, then multiply each part by 3.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 8,
+      question: "A class has 5 rows of 9 chairs. How many chairs are there?",
+      options: ["35", "40", "45", "50"],
+      correctAnswer: "45",
+      topic: "Word Problems",
+      explanation: "5 rows of 9 means 5 × 9 = 45.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 9,
+      question: "What is 21 × 4?",
+      options: ["74", "84", "94", "64"],
+      correctAnswer: "84",
+      topic: "Area Models and Partial Products",
+      explanation: "21 × 4 = 84.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 10,
+      question: "What is 32 × 3?",
+      options: ["86", "96", "92", "88"],
+      correctAnswer: "96",
+      topic: "Area Models and Partial Products",
+      explanation: "32 × 3 = 96.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+  ],
 
-  /* ================= UNIT 3 ================= */
-  {
-    id: 9,
-    unit: "Unit 3: Multiplication",
-    question: "What is 3 × 4?",
-    options: ["7", "12", "9", "8"],
-    correctAnswer: "12",
-    explanation: "3 groups of 4 equals 12.",
-  },
-  {
-    id: 10,
-    unit: "Unit 3: Multiplication",
-    question: "What does multiplication represent?",
-    options: [
-      "Repeated addition",
-      "Random numbers",
-      "Subtraction",
-      "Division only",
-    ],
-    correctAnswer: "Repeated addition",
-    explanation: "Multiplication is adding equal groups.",
-  },
-  {
-    id: 11,
-    unit: "Unit 3: Multiplication",
-    question: "What is 13 × 4 using partial products?",
-    options: ["52", "48", "40", "56"],
-    correctAnswer: "52",
-    explanation: "13 = 10 + 3 → (10×4)+(3×4)=40+12=52.",
-  },
+  "Unit 4: Division": [
+    {
+      id: 1,
+      question: "What is 12 ÷ 3?",
+      options: ["2", "3", "4", "6"],
+      correctAnswer: "4",
+      topic: "Quotients, Remainders, and Word Problems",
+      explanation: "12 split into 3 equal groups gives 4 in each group.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 2,
+      question: "What is 20 ÷ 5?",
+      options: ["2", "4", "5", "10"],
+      correctAnswer: "4",
+      topic: "Division Basics",
+      explanation: "20 divided by 5 equals 4.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 3,
+      question: "What is 18 ÷ 4?",
+      options: ["4 remainder 2", "4 remainder 1", "5 remainder 1", "3 remainder 2"],
+      correctAnswer: "4 remainder 2",
+      topic: "Remainders",
+      explanation: "4 groups of 4 make 16, with 2 left over.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 4,
+      question: "What is 25 ÷ 6?",
+      options: ["4 remainder 1", "5 remainder 1", "4 remainder 2", "3 remainder 1"],
+      correctAnswer: "4 remainder 1",
+      topic: "Remainders",
+      explanation: "6 goes into 25 four times, with 1 left over.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 5,
+      question: "A teacher has 24 pencils and gives them equally to 6 students. How many each?",
+      options: ["3", "4", "5", "6"],
+      correctAnswer: "4",
+      topic: "Word Problems",
+      explanation: "24 ÷ 6 = 4 pencils each.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 6,
+      question: "A baker made 30 cookies and put 5 in each bag. How many bags?",
+      options: ["5", "6", "7", "8"],
+      correctAnswer: "6",
+      topic: "Word Problems",
+      explanation: "30 ÷ 5 = 6 bags.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 7,
+      question: "What is 16 ÷ 2?",
+      options: ["6", "7", "8", "9"],
+      correctAnswer: "8",
+      topic: "Division Basics",
+      explanation: "16 split into 2 equal groups gives 8.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+    {
+      id: 8,
+      question: "What is 27 ÷ 5?",
+      options: ["5 remainder 2", "5 remainder 1", "4 remainder 2", "6 remainder 2"],
+      correctAnswer: "5 remainder 2",
+      topic: "Remainders",
+      explanation: "5 × 5 = 25, and 2 are left over.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 9,
+      question: "Which multiplication fact helps solve 35 ÷ 7?",
+      options: ["7 × 4 = 28", "7 × 5 = 35", "7 × 6 = 42", "5 × 5 = 25"],
+      correctAnswer: "7 × 5 = 35",
+      topic: "Division Basics",
+      explanation: "Division and multiplication are related. Since 7 × 5 = 35, 35 ÷ 7 = 5.",
+      difficulty: "Medium",
+      type: "AI Quiz",
+    },
+    {
+      id: 10,
+      question: "What is 40 ÷ 8?",
+      options: ["4", "5", "6", "8"],
+      correctAnswer: "5",
+      topic: "Division Basics",
+      explanation: "40 divided by 8 equals 5.",
+      difficulty: "Easy",
+      type: "AI Quiz",
+    },
+  ],
+};
 
-  /* ================= UNIT 4 ================= */
-  {
-    id: 12,
-    unit: "Unit 4: Division",
-    question: "What is 12 ÷ 3?",
-    options: ["4", "3", "6", "2"],
-    correctAnswer: "4",
-    explanation: "12 split into 3 equal groups gives 4 each.",
-  },
-  {
-    id: 13,
-    unit: "Unit 4: Division",
-    question: "What is a quotient?",
-    options: [
-      "The remainder",
-      "The answer to division",
-      "A subtraction result",
-      "A random number",
-    ],
-    correctAnswer: "The answer to division",
-    explanation: "Quotient is the result of division.",
-  },
-  {
-    id: 14,
-    unit: "Unit 4: Division",
-    question: "What is 14 ÷ 4?",
-    options: [
-      "3 remainder 2",
-      "4 remainder 2",
-      "2 remainder 3",
-      "3 remainder 1",
-    ],
-    correctAnswer: "3 remainder 2",
-    explanation: "4×3=12, remainder is 2.",
-  },
-];
-
-/* ============================== GENERATOR ============================== */
-
-export function getQuizByUnit(unit: string, count = 10): QuizQuestion[] {
-  const filtered = QUIZ_BANK.filter((q) => q.unit === unit);
-
-  if (!filtered.length) return [];
-
-  // shuffle
-  const shuffled = [...filtered].sort(() => Math.random() - 0.5);
-
-  return shuffled.slice(0, count);
+export function getQuizBankByUnit(unit: string): QuizBankQuestion[] {
+  const questions = QUIZ_BANK[unit] ?? [];
+  return questions.map((q, index) => ({
+    ...q,
+    id: index + 1,
+  }));
 }
-
-/* ============================== HELPERS ============================== */
 
 export function getAllQuizUnits(): string[] {
-  return getAllUnits();
+  return Object.keys(QUIZ_BANK);
 }

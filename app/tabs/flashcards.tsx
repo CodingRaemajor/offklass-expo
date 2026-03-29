@@ -20,7 +20,8 @@ import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
 import { AskAIButton } from "../../components/AskAIButton";
 import { NextStepFooter } from "../../components/NextStepFooter";
 import { generateFlashcardsFromTranscript } from "../../lib/ai.local";
-import { LESSON_INFO } from "../../lib/lessonTranscripts";
+import { getFlashcardsBankByUnit } from "../../lib/flashcardsBank";
+import { LESSON_INFO, getCombinedTranscriptByUnit, getLessonInfoByUnit } from "../../lib/lessonTranscripts";
 
 /* --------------------------------- Types --------------------------------- */
 
@@ -34,39 +35,63 @@ type Card = {
 const SEED: Card[] = [
   {
     id: "1",
-    front: "What does 3 hundreds, 2 tens, and 5 ones make?",
+    front: "What does 3 hundreds blocks, 2 tens blocks, and 5 ones blocks represent?",
     back: "325",
-    topic: "Place Value",
+    topic: "Place Value Blocks",
   },
   {
     id: "2",
     front: "In the number 4,567, what is the value of the digit 5?",
-    back: "500",
-    topic: "Place Value",
+    back: "500 (5 hundreds)",
+    topic: "Place Value Tables",
   },
   {
     id: "3",
-    front: "What is 27 + 15?",
-    back: "42",
-    topic: "Addition",
+    front: "What is the place value of 8 in the number 28,394?",
+    back: "Thousands place",
+    topic: "Finding Place Value",
   },
   {
     id: "4",
-    front: "What is 54 - 19?",
-    back: "35",
-    topic: "Subtraction",
+    front: "Using digits 7, 2, 9, 1, what's the largest number you can make?",
+    back: "9,721",
+    topic: "Creating the Largest Number",
   },
   {
     id: "5",
-    front: "What is 6 × 7?",
-    back: "42",
-    topic: "Multiplication",
+    front: "Write 6,000 + 300 + 40 + 8 in standard form.",
+    back: "6,348",
+    topic: "Expanded Form",
   },
   {
     id: "6",
-    front: "What is 12 ÷ 3?",
-    back: "4",
-    topic: "Division",
+    front: "How many tens are in the number 3,540?",
+    back: "4 (the digit in the tens place)",
+    topic: "Place Value Blocks",
+  },
+  {
+    id: "7",
+    front: "In 50,267, what role does the zero play?",
+    back: "Placeholder in thousands position",
+    topic: "Place Value Tables",
+  },
+  {
+    id: "8",
+    front: "What is the smallest number you can make with digits 5, 8, 2, 6?",
+    back: "2,568",
+    topic: "Creating the Largest Number",
+  },
+  {
+    id: "9",
+    front: "In a place value chart, what number has: 7 thousands, 0 hundreds, 4 tens, 9 ones?",
+    back: "7,049",
+    topic: "Place Value Tables",
+  },
+  {
+    id: "10",
+    front: "What is the expanded form of 8,205?",
+    back: "8,000 + 200 + 5",
+    topic: "Finding Place Value",
   },
 ];
 
@@ -110,21 +135,18 @@ const L10N: Record<
     rankC: string;
     rankD: string;
     tapToFlipHint: string;
+    deckLabel: string;
+    practiceLabel: string;
     unitTitle: string;
     generateDeck: string;
     generatingDeck: string;
     aiFailed: string;
-    deckLabel: string;
-    practiceLabel: string;
-    libraryLabel: string;
-    emptyHint: string;
-    loadingHint: string;
-    backHint: string;
+    preloadingHint: string;
   }
 > = {
   English: {
-    title: "🧠 Offklass Flashcards!",
-    subtitle: "Pick a unit, load the deck, flip cards, and build your streak!",
+    title: "🧠 AI Flashcards!",
+    subtitle: "Pick a unit, generate cards, flip the card, and build your streak!",
     questionLbl: "Question",
     answerLbl: "Answer",
     topicLbl: "Topic",
@@ -155,20 +177,17 @@ const L10N: Record<
     rankC: "Rising Star",
     rankD: "Keep Going",
     tapToFlipHint: 'Tip: Tap "Show Answer" to flip',
-    unitTitle: "Choose Unit",
-    generateDeck: "Load Flashcards",
-    generatingDeck: "Loading...",
-    aiFailed: "Flashcard library could not be loaded. Showing backup cards.",
     deckLabel: "Deck",
     practiceLabel: "Practice",
-    libraryLabel: "Library",
-    emptyHint: 'Select a unit first, then tap "Load Flashcards".',
-    loadingHint: "Loading your local flashcard deck...",
-    backHint: "Nice! Now choose ✅ or ❌",
+    unitTitle: "Choose Unit",
+    generateDeck: "Generate Flashcards",
+    generatingDeck: "Generating...",
+    aiFailed: "AI flashcard generation failed. Showing backup cards.",
+    preloadingHint: "Preparing your flashcards in the background…",
   },
   नेपाली: {
-    title: "🧠 Offklass फ्ल्यासकार्ड!",
-    subtitle: "युनिट छान्नुहोस्, डेक लोड गर्नुहोस्, कार्ड फ्लिप गर्नुहोस्, र स्ट्रिक बनाउनुहोस्!",
+    title: "🧠 AI फ्ल्यासकार्ड!",
+    subtitle: "युनिट छान्नुहोस्, कार्ड बनाउनुहोस्, फ्लिप गर्नुहोस् र स्ट्रिक बनाउनुहोस्!",
     questionLbl: "प्रश्न",
     answerLbl: "उत्तर",
     topicLbl: "विषय",
@@ -199,20 +218,17 @@ const L10N: Record<
     rankC: "राइजिङ स्टार",
     rankD: "जारी राख्नुहोस्",
     tapToFlipHint: 'टिप: "उत्तर देखाउनुहोस्" ट्याप गरेर फ्लिप गर्नुहोस्',
-    unitTitle: "युनिट छान्नुहोस्",
-    generateDeck: "फ्ल्यासकार्ड लोड गर्नुहोस्",
-    generatingDeck: "लोड हुँदैछ...",
-    aiFailed: "फ्ल्यासकार्ड लाइब्रेरी लोड हुन सकेन। ब्याकअप कार्ड देखाइँदैछ।",
     deckLabel: "डेक",
     practiceLabel: "अभ्यास",
-    libraryLabel: "लाइब्रेरी",
-    emptyHint: 'पहिले युनिट छान्नुहोस्, त्यसपछि "फ्ल्यासकार्ड लोड गर्नुहोस्" थिच्नुहोस्।',
-    loadingHint: "तपाईंको लोकल फ्ल्यासकार्ड डेक लोड हुँदैछ...",
-    backHint: "राम्रो! अब ✅ वा ❌ छान्नुहोस्",
+    unitTitle: "युनिट छान्नुहोस्",
+    generateDeck: "फ्ल्यासकार्ड बनाउनुहोस्",
+    generatingDeck: "बनाइँदैछ...",
+    aiFailed: "AI फ्ल्यासकार्ड बनाउन सकेन। ब्याकअप कार्ड देखाइँदैछ।",
+    preloadingHint: "पृष्ठभूमिमा फ्ल्यासकार्ड तयार हुँदैछ…",
   },
   اردو: {
-    title: "🧠 Offklass فلیش کارڈز!",
-    subtitle: "یونٹ منتخب کریں، ڈیک لوڈ کریں، کارڈ پلٹیں اور اسٹریک بنائیں!",
+    title: "🧠 AI فلیش کارڈز!",
+    subtitle: "یونٹ منتخب کریں، کارڈز بنائیں، پلٹیں اور اسٹریک بڑھائیں!",
     questionLbl: "سوال",
     answerLbl: "جواب",
     topicLbl: "موضوع",
@@ -243,20 +259,17 @@ const L10N: Record<
     rankC: "رائزنگ اسٹار",
     rankD: "جاری رکھیں",
     tapToFlipHint: 'ٹِپ: "جواب دکھائیں" پر ٹیپ کر کے پلٹیں',
-    unitTitle: "یونٹ منتخب کریں",
-    generateDeck: "فلیش کارڈز لوڈ کریں",
-    generatingDeck: "لوڈ ہو رہے ہیں...",
-    aiFailed: "فلیش کارڈ لائبریری لوڈ نہیں ہو سکی۔ بیک اپ کارڈز دکھائے جا رہے ہیں۔",
     deckLabel: "ڈیک",
     practiceLabel: "پریکٹس",
-    libraryLabel: "لائبریری",
-    emptyHint: 'پہلے یونٹ منتخب کریں، پھر "فلیش کارڈز لوڈ کریں" دبائیں۔',
-    loadingHint: "آپ کا لوکل فلیش کارڈ ڈیک لوڈ ہو رہا ہے...",
-    backHint: "بہت خوب! اب ✅ یا ❌ منتخب کریں",
+    unitTitle: "یونٹ منتخب کریں",
+    generateDeck: "فلیش کارڈز بنائیں",
+    generatingDeck: "بن رہے ہیں...",
+    aiFailed: "AI فلیش کارڈز نہیں بنا سکا۔ بیک اپ کارڈز دکھائے جا رہے ہیں۔",
+    preloadingHint: "پس منظر میں فلیش کارڈز تیار ہو رہے ہیں…",
   },
   বাংলা: {
-    title: "🧠 Offklass ফ্ল্যাশকার্ড!",
-    subtitle: "ইউনিট বাছুন, ডেক লোড করুন, কার্ড ফ্লিপ করুন, স্ট্রিক বাড়ান!",
+    title: "🧠 AI ফ্ল্যাশকার্ড!",
+    subtitle: "ইউনিট বাছুন, কার্ড তৈরি করুন, ফ্লিপ করুন, স্ট্রিক বাড়ান!",
     questionLbl: "প্রশ্ন",
     answerLbl: "উত্তর",
     topicLbl: "বিষয়",
@@ -287,20 +300,17 @@ const L10N: Record<
     rankC: "রাইজিং স্টার",
     rankD: "চালিয়ে যান",
     tapToFlipHint: 'টিপ: "উত্তর দেখুন" ট্যাপ করে ফ্লিপ করুন',
-    unitTitle: "ইউনিট বাছুন",
-    generateDeck: "ফ্ল্যাশকার্ড লোড করুন",
-    generatingDeck: "লোড হচ্ছে...",
-    aiFailed: "ফ্ল্যাশকার্ড লাইব্রেরি লোড করা যায়নি। ব্যাকআপ কার্ড দেখানো হচ্ছে।",
     deckLabel: "ডেক",
     practiceLabel: "প্র্যাকটিস",
-    libraryLabel: "লাইব্রেরি",
-    emptyHint: 'আগে ইউনিট বাছুন, তারপর "ফ্ল্যাশকার্ড লোড করুন" চাপুন।',
-    loadingHint: "আপনার লোকাল ফ্ল্যাশকার্ড ডেক লোড হচ্ছে...",
-    backHint: "দারুণ! এখন ✅ বা ❌ বেছে নিন",
+    unitTitle: "ইউনিট বাছুন",
+    generateDeck: "ফ্ল্যাশকার্ড তৈরি করুন",
+    generatingDeck: "তৈরি হচ্ছে...",
+    aiFailed: "AI ফ্ল্যাশকার্ড তৈরি করতে পারেনি। ব্যাকআপ কার্ড দেখানো হচ্ছে।",
+    preloadingHint: "ব্যাকগ্রাউন্ডে ফ্ল্যাশকার্ড তৈরি হচ্ছে…",
   },
   हिन्दी: {
-    title: "🧠 Offklass फ्लैशकार्ड!",
-    subtitle: "यूनिट चुनो, डेक लोड करो, कार्ड फ्लिप करो और स्ट्रीक बढ़ाओ!",
+    title: "🧠 AI फ्लैशकार्ड!",
+    subtitle: "यूनिट चुनें, कार्ड बनाएं, फ्लिप करें और स्ट्रीक बढ़ाएँ!",
     questionLbl: "प्रश्न",
     answerLbl: "उत्तर",
     topicLbl: "विषय",
@@ -318,29 +328,26 @@ const L10N: Record<
     finishedMsg: "आपने फ्लैशकार्ड पूरे कर लिए!",
     practiceModeLabel: "सिर्फ 'और अभ्यास चाहिए' वाले कार्ड्स का अभ्यास करें",
     pointsLbl: "पॉइंट्स",
-    levelComplete: "डेक पूरा!",
-    streak: "स्ट्रीक",
-    rewardsTitle: "रिवॉर्ड्स",
-    targetsTitle: "प्रैक्टिस टार्गेट्स",
-    playAgain: "फिर से खेलो",
-    practiceWrong: "Needs Practice कार्ड्स का अभ्यास",
-    noWrong: "Perfect! अभ्यास के लिए कोई कार्ड नहीं 🎉",
-    rank: "रैंक",
-    rankA: "लेजेंड",
-    rankB: "प्रो",
-    rankC: "राइजिंग स्टार",
-    rankD: "चलते रहो",
+    levelComplete: "Deck Complete!",
+    streak: "Streak",
+    rewardsTitle: "Rewards",
+    targetsTitle: "Practice Targets",
+    playAgain: "Play Again",
+    practiceWrong: "Practice Needs Practice Cards",
+    noWrong: "Perfect! No cards to practice 🎉",
+    rank: "Rank",
+    rankA: "Legend",
+    rankB: "Pro",
+    rankC: "Rising Star",
+    rankD: "Keep Going",
     tapToFlipHint: 'टिप: "उत्तर दिखाएँ" टैप करके फ्लिप करें',
-    unitTitle: "यूनिट चुनो",
-    generateDeck: "फ्लैशकार्ड लोड करो",
-    generatingDeck: "लोड हो रहा है...",
-    aiFailed: "फ्लैशकार्ड लाइब्रेरी लोड नहीं हो सकी। बैकअप कार्ड दिखाए जा रहे हैं।",
-    deckLabel: "डेक",
-    practiceLabel: "प्रैक्टिस",
-    libraryLabel: "लाइब्रेरी",
-    emptyHint: 'पहले यूनिट चुनो, फिर "फ्लैशकार्ड लोड करो" दबाओ।',
-    loadingHint: "तुम्हारा लोकल फ्लैशकार्ड डेक लोड हो रहा है...",
-    backHint: "शाबाश! अब ✅ या ❌ चुनो",
+    deckLabel: "Deck",
+    practiceLabel: "Practice",
+    unitTitle: "यूनिट चुनें",
+    generateDeck: "फ्लैशकार्ड बनाएं",
+    generatingDeck: "बन रहे हैं...",
+    aiFailed: "AI फ्लैशकार्ड नहीं बना सका। बैकअप कार्ड दिखाए जा रहे हैं।",
+    preloadingHint: "बैकग्राउंड में फ्लैशकार्ड तैयार हो रहे हैं…",
   },
 };
 
@@ -362,8 +369,14 @@ function isUsableCard(front: string, back: string) {
   const f = String(front ?? "").trim().replace(/\s+/g, " ");
   const b = String(back ?? "").trim().replace(/\s+/g, " ");
 
-  if (f.length < 4 || b.length < 1) return false;
-  if (f.length > 140 || b.length > 220) return false;
+  if (f.length < 10 || b.length < 2) return false;
+  if (f.length > 120 || b.length > 160) return false;
+  if (/^[A-Z\s\-]{4,}$/.test(f) && f.split(" ").length <= 5) return false;
+  if (/^(what is this|practice this|remember this)$/i.test(f)) return false;
+  if (/(with|re|digit|value|place|add|subtract|multiply|divide)$/i.test(f) && !/[\?\.!]$/.test(f)) {
+    return false;
+  }
+
   return true;
 }
 
@@ -380,9 +393,145 @@ function normalizeGeneratedCards(input: unknown[], fallbackTopic: string): Card[
     .filter((c) => isUsableCard(c.front, c.back));
 }
 
+function collectUnitTitles(node: unknown, out: Set<string>, seen = new WeakSet<object>()) {
+  if (!node || typeof node !== "object") return;
+
+  if (seen.has(node as object)) return;
+  seen.add(node as object);
+
+  if (Array.isArray(node)) {
+    node.forEach((item) => collectUnitTitles(item, out, seen));
+    return;
+  }
+
+  const obj = node as Record<string, unknown>;
+
+  if (typeof obj.unit === "string" && obj.unit.trim()) {
+    out.add(obj.unit.trim());
+  }
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (/^unit\s+\d+/i.test(key.trim())) {
+      out.add(key.trim());
+    }
+    collectUnitTitles(value, out, seen);
+  }
+}
+
 function getUnitTitles(): string[] {
-  const units = Array.from(new Set(LESSON_INFO.map((item) => item.unit))).filter(Boolean);
+  const out = new Set<string>();
+  collectUnitTitles(LESSON_INFO, out);
+
+  const units = Array.from(out);
   return units.length ? units : ["Unit 1: Place Value"];
+}
+
+function collectTranscripts(node: unknown, out: string[], seen = new WeakSet<object>()) {
+  if (!node) return;
+
+  if (Array.isArray(node)) {
+    node.forEach((item) => collectTranscripts(item, out, seen));
+    return;
+  }
+
+  if (typeof node !== "object") return;
+
+  if (seen.has(node as object)) return;
+  seen.add(node as object);
+
+  const obj = node as Record<string, unknown>;
+
+  if (typeof obj.transcript === "string" && obj.transcript.trim()) {
+    out.push(obj.transcript.trim());
+  }
+
+  for (const value of Object.values(obj)) {
+    collectTranscripts(value, out, seen);
+  }
+}
+
+function getTranscriptForUnit(unitTitle: string): string {
+  const found: string[] = [];
+
+  try {
+    const combined = getCombinedTranscriptByUnit(unitTitle);
+    if (combined.trim()) {
+      return combined.trim();
+    }
+  } catch {}
+
+  try {
+    const direct = getLessonInfoByUnit(unitTitle as any);
+    collectTranscripts(direct, found);
+  } catch {}
+
+  const walk = (node: unknown, seen = new WeakSet<object>()) => {
+    if (!node || typeof node !== "object") return;
+
+    if (seen.has(node as object)) return;
+    seen.add(node as object);
+
+    if (Array.isArray(node)) {
+      node.forEach((item) => walk(item, seen));
+      return;
+    }
+
+    const obj = node as Record<string, unknown>;
+
+    if (typeof obj.unit === "string" && obj.unit.trim() === unitTitle.trim()) {
+      collectTranscripts(obj, found);
+    }
+
+    for (const [key, value] of Object.entries(obj)) {
+      if (key.trim() === unitTitle.trim()) {
+        collectTranscripts(value, found);
+      }
+      walk(value, seen);
+    }
+  };
+
+  walk(LESSON_INFO);
+
+  return Array.from(new Set(found)).join("\n\n").trim();
+}
+
+function getFallbackDeckForUnit(unitTitle: string): Card[] {
+  const fallback = getFlashcardsBankByUnit(unitTitle);
+
+  if (!fallback.length) {
+    return SEED;
+  }
+
+  return fallback.map((card, index) => ({
+    id: card.id || `${unitTitle}-${index + 1}`,
+    front: String(card.front ?? "").trim(),
+    back: String(card.back ?? "").trim(),
+    topic: String(card.topic ?? unitTitle).trim(),
+  }));
+}
+
+/* ⚡ Core generation logic — shared between preload & on-demand */
+async function tryGenerateCardsForUnit(unitTitle: string): Promise<{ cards: Card[]; source: "ai" | "fallback" | "seed" }> {
+  const fallbackDeck = getFallbackDeckForUnit(unitTitle);
+  const transcript = getTranscriptForUnit(unitTitle);
+
+  if (!transcript) {
+    return { cards: fallbackDeck, source: fallbackDeck === SEED ? "seed" : "fallback" };
+  }
+
+  try {
+    const generated = await generateFlashcardsFromTranscript(transcript, unitTitle);
+    const normalized = normalizeGeneratedCards(generated, unitTitle);
+    const usableCards = normalized.filter((c) => isUsableCard(c.front, c.back));
+
+    if (usableCards.length > 0) {
+      return { cards: usableCards, source: "ai" };
+    }
+  } catch (error) {
+    console.log("Flashcard generation failed:", error);
+  }
+
+  return { cards: fallbackDeck, source: fallbackDeck === SEED ? "seed" : "fallback" };
 }
 
 /* -------------------------------- Component -------------------------------- */
@@ -403,7 +552,15 @@ export default function Flashcards() {
   );
   const [isGenerating, setIsGenerating] = useState(false);
   const [hasGeneratedDeck, setHasGeneratedDeck] = useState(false);
-  const [deckSource, setDeckSource] = useState<"library" | "seed">("seed");
+  const [deckSource, setDeckSource] = useState<"ai" | "fallback" | "seed">("seed");
+
+  /* ⚡ Background pre-generation state — mirrors quiz pattern */
+  const [pregeneratedDeck, setPregeneratedDeck] = useState<Card[] | null>(null);
+  const [preloadDeckSource, setPreloadDeckSource] = useState<"ai" | "fallback" | "seed">("seed");
+  const [isPreloading, setIsPreloading] = useState(false);
+  const preloadCancelRef = useRef(false);
+  const preloadUnitRef = useRef<string | null>(null);
+  const deckCacheRef = useRef<Record<string, { cards: Card[]; source: "ai" | "fallback" | "seed" }>>({});
 
   const [completed, setCompleted] = useState<string[]>([]);
   const [correct, setCorrect] = useState(0);
@@ -492,6 +649,67 @@ export default function Flashcards() {
       cancelled = true;
     };
   }, [unitTitles]);
+
+  /* ⚡ Background pre-generation — triggers whenever selectedUnit changes */
+  useEffect(() => {
+    if (!selectedUnit) {
+      setPregeneratedDeck(null);
+      setIsPreloading(false);
+      return;
+    }
+
+    // Use cache if available
+    const cached = deckCacheRef.current[selectedUnit];
+    if (cached && cached.cards.length > 0) {
+      setPregeneratedDeck(cached.cards);
+      setPreloadDeckSource(cached.source);
+      setIsPreloading(false);
+      preloadUnitRef.current = selectedUnit;
+      return;
+    }
+
+    // Don't re-preload if already preloaded for this unit
+    if (preloadUnitRef.current === selectedUnit && pregeneratedDeck !== null) {
+      return;
+    }
+
+    // Cancel any in-flight preload and start fresh
+    preloadCancelRef.current = true;
+    setPregeneratedDeck(null);
+    setIsPreloading(true);
+
+    const thisUnit = selectedUnit;
+    preloadCancelRef.current = false;
+    preloadUnitRef.current = thisUnit;
+
+    (async () => {
+      try {
+        const result = await tryGenerateCardsForUnit(thisUnit);
+
+        if (preloadCancelRef.current || preloadUnitRef.current !== thisUnit) return;
+
+        if (result.cards.length > 0) {
+          deckCacheRef.current[thisUnit] = result;
+          setPregeneratedDeck(result.cards);
+          setPreloadDeckSource(result.source);
+        } else {
+          setPregeneratedDeck(null);
+        }
+      } catch (err) {
+        console.error("Background flashcard preload error:", err);
+        if (preloadCancelRef.current || preloadUnitRef.current !== thisUnit) return;
+        setPregeneratedDeck(null);
+      } finally {
+        if (preloadUnitRef.current === thisUnit) {
+          setIsPreloading(false);
+        }
+      }
+    })();
+
+    return () => {
+      preloadCancelRef.current = true;
+    };
+  }, [selectedUnit]);
 
   const currentCard = cards[current] ?? null;
   const points = correct * 10 + bestStreak * 5 + (isFinished ? 25 : 0);
@@ -640,33 +858,108 @@ export default function Flashcards() {
     resetFlip(true);
   }
 
+  /* ⚡ generateDeck — uses preloaded cache when available (near-instant) */
   async function generateDeck(unit: string) {
     if (isGenerating) return;
 
+    setHasGeneratedDeck(true);
+
+    // ⚡ Check cache first (set by background preload)
+    const cached = deckCacheRef.current[unit];
+    if (cached && cached.cards.length > 0) {
+      setDeckSource(cached.source);
+      setBaseCards(cached.cards);
+      resetSession(true, cached.cards, true);
+
+      // Clear so next "Generate Flashcards" forces fresh generation
+      delete deckCacheRef.current[unit];
+      setPregeneratedDeck(null);
+      preloadUnitRef.current = null;
+      return;
+    }
+
+    // ⚡ Pregenerated deck available but not yet cached (race condition safety)
+    if (pregeneratedDeck && pregeneratedDeck.length > 0) {
+      setDeckSource(preloadDeckSource);
+      setBaseCards(pregeneratedDeck);
+      resetSession(true, pregeneratedDeck, true);
+      setPregeneratedDeck(null);
+      preloadUnitRef.current = null;
+      return;
+    }
+
+    // Fallback: generate on-demand (preload still running or wasn't available)
+    setIsGenerating(true);
+
     try {
-      setHasGeneratedDeck(true);
-      setIsGenerating(true);
+      const result = await tryGenerateCardsForUnit(unit);
 
-      const generated = await generateFlashcardsFromTranscript("", unit);
-      const normalized = normalizeGeneratedCards(generated, unit);
-
-      if (!normalized.length) {
-        throw new Error("No flashcards were found in the local library.");
+      if (result.cards.length > 0) {
+        setDeckSource(result.source);
+        setBaseCards(result.cards);
+        resetSession(true, result.cards, true);
+      } else {
+        // Last-resort fallback
+        setDeckSource("seed");
+        setBaseCards(SEED);
+        resetSession(true, SEED, true);
       }
-
-      setDeckSource("library");
-      setBaseCards(normalized);
-      resetSession(true, normalized, true);
     } catch (error) {
-      console.log("Flashcard library load failed:", error);
-      setDeckSource("seed");
-      setBaseCards(SEED);
-      resetSession(true, SEED, true);
+      console.log("Flashcard generation failed:", error);
+      const fallbackDeck = getFallbackDeckForUnit(unit);
+      setDeckSource(fallbackDeck === SEED ? "seed" : "fallback");
+      setBaseCards(fallbackDeck);
+      resetSession(true, fallbackDeck, true);
       Alert.alert(T.finishedTitle, T.aiFailed);
     } finally {
       setIsGenerating(false);
     }
   }
+
+  /* ⚡ playAgain — forces fresh AI generation, clears cache */
+  async function playAgain() {
+    if (!selectedUnit) {
+      resetSession(false, baseCards, false);
+      return;
+    }
+
+    // Clear cache to force fresh generation
+    delete deckCacheRef.current[selectedUnit];
+    setPregeneratedDeck(null);
+    preloadUnitRef.current = null;
+
+    setIsGenerating(true);
+    setHasGeneratedDeck(true);
+    resetSession(true, [], true);
+    setCards([]);
+
+    try {
+      const result = await tryGenerateCardsForUnit(selectedUnit);
+
+      if (result.cards.length > 0) {
+        deckCacheRef.current[selectedUnit] = result;
+        setDeckSource(result.source);
+        setBaseCards(result.cards);
+        resetSession(true, result.cards, true);
+      } else {
+        setDeckSource("seed");
+        setBaseCards(SEED);
+        resetSession(true, SEED, true);
+      }
+    } catch (error) {
+      console.log("Play again generation failed:", error);
+      const fallbackDeck = getFallbackDeckForUnit(selectedUnit);
+      setDeckSource(fallbackDeck === SEED ? "seed" : "fallback");
+      setBaseCards(fallbackDeck);
+      resetSession(true, fallbackDeck, true);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  /* ⚡ Determine button state */
+  const canGenerateInstantly = !!(pregeneratedDeck && pregeneratedDeck.length > 0) ||
+    !!(deckCacheRef.current[selectedUnit]?.cards?.length);
 
   const maxCardHeight = Math.min(
     isTablet ? 420 : 340,
@@ -735,15 +1028,39 @@ export default function Flashcards() {
                 })}
               </ScrollView>
 
+              {/* ⚡ Preloading hint */}
+              {isPreloading && (
+                <View style={s.preloadHintCard}>
+                  <ActivityIndicator size="small" color="#5B35F2" />
+                  <Text style={s.preloadHintText}>{T.preloadingHint}</Text>
+                </View>
+              )}
+
+              {/* ⚡ Ready indicator */}
+              {!isPreloading && canGenerateInstantly && (
+                <View style={s.readyHintCard}>
+                  <Ionicons name="checkmark-circle" size={16} color="#16A34A" />
+                  <Text style={s.readyHintText}>
+                    {preloadDeckSource === "ai" ? "AI deck ready!" : "Deck ready!"} Tap Generate to start instantly.
+                  </Text>
+                </View>
+              )}
+
               <TouchableOpacity
                 onPress={() => generateDeck(selectedUnit)}
                 disabled={isGenerating}
-                style={[s.generateBtn, isGenerating && s.disabled]}
+                style={[
+                  s.generateBtn,
+                  canGenerateInstantly && s.generateBtnReady,
+                  isGenerating && s.disabled,
+                ]}
               >
                 {isGenerating ? (
                   <ActivityIndicator color="#fff" />
+                ) : isPreloading ? (
+                  <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Ionicons name="book-outline" size={18} color="#fff" />
+                  <Ionicons name="sparkles" size={18} color="#fff" />
                 )}
                 <Text style={s.generateBtnText}>
                   {isGenerating ? T.generatingDeck : T.generateDeck}
@@ -773,10 +1090,10 @@ export default function Flashcards() {
                 </Text>
               </View>
 
-              {deckSource === "library" && (
+              {deckSource === "ai" && (
                 <View style={[s.pill, { borderColor: "rgba(91,53,242,0.22)" }]}>
-                  <Ionicons name="library-outline" size={14} color="#5B35F2" />
-                  <Text style={[s.pillTxt, { color: "#5B35F2" }]}>{T.libraryLabel}</Text>
+                  <Ionicons name="sparkles" size={14} color="#5B35F2" />
+                  <Text style={[s.pillTxt, { color: "#5B35F2" }]}>AI</Text>
                 </View>
               )}
             </View>
@@ -795,13 +1112,15 @@ export default function Flashcards() {
             <View style={s.loaderCard}>
               <Ionicons name="albums-outline" size={42} color="#5B35F2" />
               <Text style={s.loaderTitle}>{T.unitTitle}</Text>
-              <Text style={s.loaderSub}>{T.emptyHint}</Text>
+              <Text style={s.loaderSub}>
+                Select a unit or topic first, then tap "{T.generateDeck}".
+              </Text>
             </View>
           ) : isGenerating ? (
             <View style={s.loaderCard}>
               <ActivityIndicator size="large" color="#5B35F2" />
               <Text style={s.loaderTitle}>{T.generatingDeck}</Text>
-              <Text style={s.loaderSub}>{T.loadingHint}</Text>
+              <Text style={s.loaderSub}>Using transcript-based AI generation...</Text>
             </View>
           ) : !isFinished ? (
             <>
@@ -835,11 +1154,7 @@ export default function Flashcards() {
                     </View>
 
                     <Text style={[s.label, rtl]}>{T.questionLbl}</Text>
-                    <Text style={[s.big, rtl]}>
-                      {isUsableCard(currentCard?.front ?? "", currentCard?.back ?? "")
-                        ? currentCard?.front
-                        : "Loading..."}
-                    </Text>
+                    <Text style={[s.big, rtl]}>{isUsableCard(currentCard?.front ?? "", currentCard?.back ?? "") ? currentCard?.front : "Loading..."}</Text>
 
                     <View style={s.tapHint}>
                       <Ionicons
@@ -877,16 +1192,12 @@ export default function Flashcards() {
                     </View>
 
                     <Text style={[s.label, rtl]}>{T.answerLbl}</Text>
-                    <Text style={[s.big, rtl]}>
-                      {isUsableCard(currentCard?.front ?? "", currentCard?.back ?? "")
-                        ? currentCard?.back
-                        : "Please load again."}
-                    </Text>
+                    <Text style={[s.big, rtl]}>{isUsableCard(currentCard?.front ?? "", currentCard?.back ?? "") ? currentCard?.back : "Please generate again."}</Text>
 
                     <View style={s.backBadgeRow}>
                       <View style={s.backBadge}>
                         <Ionicons name="bulb" size={14} color="#111827" />
-                        <Text style={s.backBadgeTxt}>{T.backHint}</Text>
+                        <Text style={s.backBadgeTxt}>Nice! Now choose ✅ or ❌</Text>
                       </View>
                     </View>
                   </Animated.View>
@@ -1074,7 +1385,7 @@ export default function Flashcards() {
               )}
 
               <TouchableOpacity
-                onPress={() => resetSession(false, baseCards, false)}
+                onPress={playAgain}
                 style={s.doneReplayBtn}
               >
                 <Ionicons name="play" size={18} color="#fff" />
@@ -1083,7 +1394,7 @@ export default function Flashcards() {
 
               <View style={{ marginTop: 12 }}>
                 <NextStepFooter
-                  onPlayAgain={() => resetSession(false, baseCards, false)}
+                  onPlayAgain={playAgain}
                   nextLessonPath="/tabs/lessons"
                   nextQuizPath="/tabs/quizzes"
                 />
@@ -1200,6 +1511,43 @@ const s = StyleSheet.create({
     color: "#5B35F2",
     fontWeight: "900",
   },
+
+  /* ⚡ Preload hint styles — mirrors quiz */
+  preloadHintCard: {
+    marginTop: 10,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "rgba(91,53,242,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(91,53,242,0.12)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  preloadHintText: {
+    color: "rgba(17,24,39,0.72)",
+    fontWeight: "800",
+    fontSize: 13,
+    flex: 1,
+  },
+  readyHintCard: {
+    marginTop: 10,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "rgba(34,197,94,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.20)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  readyHintText: {
+    color: "#16A34A",
+    fontWeight: "900",
+    fontSize: 13,
+    flex: 1,
+  },
+
   generateBtn: {
     marginTop: 12,
     backgroundColor: "#5B35F2",
@@ -1210,6 +1558,10 @@ const s = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     gap: 10,
+  },
+  /* ⚡ Green when deck is ready instantly */
+  generateBtnReady: {
+    backgroundColor: "#16A34A",
   },
   generateBtnText: {
     color: "#fff",
