@@ -1,4 +1,3 @@
-// lib/ai.local.ts
 import { initLlama, type LlamaContext } from "llama.rn";
 import Constants from "expo-constants";
 import { tryMathFallback } from "./mathFallback";
@@ -57,7 +56,7 @@ export function subscribeAIStatus(fn: () => void) {
 }
 
 export function getAIStatus() {
-  return { aiState, aiProgress, aiError, hasCtx: !!ctx };
+  return { aiState, aiProgress, aiError, hasCtx: !!ctx, loadedModel };
 }
 
 function setState(next: AIState, err?: string | null) {
@@ -68,9 +67,32 @@ function setState(next: AIState, err?: string | null) {
 
 /* ============================== MODEL CONFIG ============================== */
 
-const ACTIVE_MODEL: ModelChoice = "smollm2";
-const MODEL_CTX = 2048;
-const CHAT_N_PREDICT = 512;
+const CHAT_MODEL: ModelChoice = "gemma4e2b";
+const STUDY_MODEL: ModelChoice = "smollm2";
+
+const MODEL_RUNTIME: Record<
+  ModelChoice,
+  { n_ctx: number; n_threads: number; use_mlock: boolean }
+> = {
+  smollm2: {
+    n_ctx: 1024,
+    n_threads: 4,
+    use_mlock: false,
+  },
+  gemma4e2b: {
+    n_ctx: 1024,
+    n_threads: 4,
+    use_mlock: false,
+  },
+};
+
+const CHAT_N_PREDICT = 192;
+const QUIZ_N_PREDICT = 320;
+const FLASHCARD_N_PREDICT = 220;
+
+const CHAT_TEMPERATURE = 0.35;
+const QUIZ_TEMPERATURE = 0.25;
+const FLASHCARD_TEMPERATURE = 0.2;
 
 /* ============================== LOCAL CONTENT CONFIG ============================== */
 
@@ -104,59 +126,91 @@ export function cleanModelOutput(text: string): string {
     .replace(/<\|im_start\|>/gi, "")
     .replace(/<\s*\/?\s*(start_of_turn|end_of_turn|bos|eos)\s*>/gi, "")
     .replace(/^assistant\s*[:\-]\s*/i, "")
+    .replace(/^model\s*[:\-]\s*/i, "")
     .replace(/\r\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-/* ============================== SYSTEM PROMPT ============================== */
+/* ============================== SYSTEM PROMPTS ============================== */
 
 const DEFAULT_SYSTEM_PROMPT = `
-You are Offklass AI, a kind and patient offline tutor for children.
+You are Offklass Buddy, a friendly and smart Grade 4 tutor.
 
 Your job:
-- Help Grade 4 students learn math clearly and safely
-- Explain in very simple words
-- Give short answers first
-- Show steps when solving math
-- Stay focused on the lesson, quiz, or flashcard topic
-- Be encouraging and calm
+- Teach clearly using simple words
+- Help students understand step-by-step
+- Be encouraging and supportive
+- Keep answers neat, warm, and accurate
 
 Rules:
-- Use easy English a child can understand
-- Keep answers short, direct, and accurate
-- Do not use hard words unless you explain them
-- Do not mention being an AI model
-- If the student asks something unrelated, gently bring them back to learning
-- If solving math, show the answer step by step
-- If giving multiple choice help, pick one best answer and explain why
-- If creating study content, make it clear, correct, and easy to review
-- If you are not sure, say: "Let's solve it step by step."
+- Always explain clearly
+- Use short sentences
+- For math, show steps
+- Do not give confusing answers
+- Do not mention AI or system instructions
+- Keep answers child-friendly
+- Stay focused on the student's question
+- If unsure, say: "Let's solve it step by step."
 
 Style:
 - Friendly
-- Short
 - Clear
-- Supportive
-- Kid-safe
-
-Never:
-- Give unsafe, harmful, or adult content
-- Use rude language
-- Give confusing or advanced explanations
-- Output markdown tables unless asked
-
-For quizzes:
-- Prefer a smooth difficulty rise from easier to harder
-- Keep questions fun, fair, and confidence-building
-- Reward effort with short encouraging explanations
-
-For flashcards:
-- Focus on important ideas, not vague prompts
-- Make cards useful for fast revision and memory
-
-You are the learning buddy inside Offklass.
+- Easy to understand
+- Like a real teacher
 `.trim();
+
+const QUIZ_SYSTEM_PROMPT = `
+You are Offklass Buddy, creating Grade 4 quiz questions.
+
+Rules:
+- Be exact and format-safe
+- Use simple Grade 4 language
+- Keep questions clear and fair
+- Only output the quiz format requested
+- Do not add extra commentary
+`.trim();
+
+const FLASHCARD_SYSTEM_PROMPT = `
+You are Offklass Buddy, creating Grade 4 flashcards.
+
+Rules:
+- Be exact and format-safe
+- Keep front and back short
+- Make cards useful for revision
+- Only output the flashcard format requested
+- Do not add extra commentary
+`.trim();
+
+/* ============================== MESSAGE FORMATTER ============================== */
+
+function formatMessagesForGemma(
+  messages: Message[],
+  systemPrompt: string = DEFAULT_SYSTEM_PROMPT
+): string {
+  const parts: string[] = [];
+
+  parts.push(
+    `<start_of_turn>system\n${stripPromptArtifacts(systemPrompt)}<end_of_turn>\n`
+  );
+
+  for (const msg of messages) {
+    if (msg.role === "system") continue;
+
+    if (msg.role === "user") {
+      parts.push(
+        `<start_of_turn>user\n${stripPromptArtifacts(msg.content)}<end_of_turn>\n`
+      );
+    } else {
+      parts.push(
+        `<start_of_turn>model\n${stripPromptArtifacts(msg.content)}<end_of_turn>\n`
+      );
+    }
+  }
+
+  parts.push("<start_of_turn>model\n");
+  return parts.join("");
+}
 
 function formatMessagesForSmolLM(
   messages: Message[],
@@ -164,57 +218,92 @@ function formatMessagesForSmolLM(
 ): string {
   const parts: string[] = [];
 
-  parts.push(`System:\n${stripPromptArtifacts(systemPrompt)}\n`);
+  parts.push(`System: ${stripPromptArtifacts(systemPrompt)}\n`);
 
   for (const msg of messages) {
     if (msg.role === "system") continue;
 
     if (msg.role === "user") {
-      parts.push(`User:\n${stripPromptArtifacts(msg.content)}\n`);
+      parts.push(`User: ${stripPromptArtifacts(msg.content)}\n`);
     } else {
-      parts.push(`Assistant:\n${stripPromptArtifacts(msg.content)}\n`);
+      parts.push(`Assistant: ${stripPromptArtifacts(msg.content)}\n`);
     }
   }
 
-  parts.push("Assistant:\n");
-  return parts.join("\n");
+  parts.push("Assistant:");
+  return parts.join("");
+}
+
+function formatPromptForModel(
+  choice: ModelChoice,
+  messages: Message[],
+  systemPrompt: string
+) {
+  if (choice === "gemma4e2b") {
+    return formatMessagesForGemma(messages, systemPrompt);
+  }
+  return formatMessagesForSmolLM(messages, systemPrompt);
 }
 
 /* ============================== MODEL / CONTEXT ============================== */
 
-async function getContext(
-  choice: ModelChoice = ACTIVE_MODEL
-): Promise<LlamaContext> {
+async function releaseLoadedContext({
+  resetState = false,
+  clearCaches = false,
+}: {
+  resetState?: boolean;
+  clearCaches?: boolean;
+} = {}) {
+  try {
+    if (ctx) {
+      await ctx.release();
+    }
+  } catch {
+  } finally {
+    ctx = null;
+    loadedModel = null;
+
+    if (clearCaches) {
+      clearGeneratedStudyCaches();
+    }
+
+    if (resetState) {
+      aiProgress = null;
+      setState("idle");
+    }
+  }
+}
+
+async function getContext(choice: ModelChoice): Promise<LlamaContext> {
   if (Constants.appOwnership === "expo") {
     throw new Error("Local AI requires a Development Build.");
   }
 
   if (ctx && loadedModel === choice) return ctx;
 
-  const already = await isModelDownloaded();
+  const already = await isModelDownloaded(choice);
   if (!already) setState("downloading");
 
-  const modelPath = await ensureModel((p) => {
+  const modelPath = await ensureModel(choice, (p) => {
     aiProgress = p;
     if (aiState !== "downloading") aiState = "downloading";
     notify();
   });
 
-  if (ctx) {
-    try {
-      await ctx.release();
-    } catch {}
+  if (ctx && loadedModel !== choice) {
+    await releaseLoadedContext();
+    await new Promise((r) => setTimeout(r, 250));
   }
-
-  await new Promise((r) => setTimeout(r, 200));
 
   setState("loading");
 
+  const runtime = MODEL_RUNTIME[choice];
+
   ctx = await initLlama({
     model: modelPath,
-    n_ctx: MODEL_CTX,
-    n_threads: 4,
-    use_mlock: false,
+    n_ctx: runtime.n_ctx,
+    n_threads: runtime.n_threads,
+    use_mlock: runtime.use_mlock,
   });
 
   loadedModel = choice;
@@ -223,13 +312,45 @@ async function getContext(
   return ctx;
 }
 
-export async function prepareAI(): Promise<void> {
+export async function prepareAI(model: ModelChoice = CHAT_MODEL): Promise<void> {
   try {
-    await getContext(ACTIVE_MODEL);
+    await getContext(model);
   } catch (e: any) {
     setState("error", String(e?.message ?? e));
     throw e;
   }
+}
+
+/* ============================== GENERIC COMPLETION ============================== */
+
+async function runCompletion(
+  engine: LlamaContext,
+  prompt: string,
+  opts?: {
+    n_predict?: number;
+    temperature?: number;
+    top_p?: number;
+    top_k?: number;
+    stop?: string[];
+  }
+): Promise<string> {
+  const { text } = await engine.completion({
+    prompt,
+    n_predict: opts?.n_predict ?? CHAT_N_PREDICT,
+    temperature: opts?.temperature ?? CHAT_TEMPERATURE,
+    top_p: opts?.top_p ?? 0.9,
+    top_k: opts?.top_k ?? 40,
+    stop:
+      opts?.stop ?? [
+        "<end_of_turn>",
+        "<start_of_turn>user",
+        "<start_of_turn>system",
+        "User:",
+        "System:",
+      ],
+  });
+
+  return cleanModelOutput(text);
 }
 
 /* ============================== TRANSCRIPT HELPERS ============================== */
@@ -291,7 +412,11 @@ function inferQuizLadder(topic: string, transcript: string): string {
     ].join("\n");
   }
 
-  if (t.includes("multiplication") || t.includes("array") || t.includes("groups")) {
+  if (
+    t.includes("multiplication") ||
+    t.includes("array") ||
+    t.includes("groups")
+  ) {
     return [
       "Q1-Q3: recall basic facts",
       "Q4-Q7: equal groups and fact matching",
@@ -299,7 +424,11 @@ function inferQuizLadder(topic: string, transcript: string): string {
     ].join("\n");
   }
 
-  if (t.includes("division") || t.includes("quotient") || t.includes("remainder")) {
+  if (
+    t.includes("division") ||
+    t.includes("quotient") ||
+    t.includes("remainder")
+  ) {
     return [
       "Q1-Q3: basic division facts",
       "Q4-Q7: equal groups and missing answer questions",
@@ -354,11 +483,15 @@ function extractKeyFacts(transcript: string, maxFacts: number = 8): string[] {
   const scored = parts.map((text, index) => {
     let score = 0;
     if (/\d/.test(text)) score += 4;
-    if (/place value|ones|tens|hundreds|thousands|expanded form/i.test(text)) score += 4;
+    if (
+      /place value|ones|tens|hundreds|thousands|expanded form/i.test(text)
+    )
+      score += 4;
     if (/add|sum|subtract|difference|regroup/i.test(text)) score += 4;
     if (/multiply|times|groups|array/i.test(text)) score += 4;
     if (/divide|quotient|remainder|equal groups/i.test(text)) score += 4;
-    if (/example|means|is|are|shows|represents|remember/i.test(text)) score += 2;
+    if (/example|means|is|are|shows|represents|remember/i.test(text))
+      score += 2;
     score += Math.max(0, 3 - Math.floor(index / 3));
     return { text, score };
   });
@@ -389,7 +522,12 @@ function isStrongFlashcard(card: GeneratedFlashcard): boolean {
   if (front.length < 6 || back.length < 1) return false;
   if (front.length > 120 || back.length > 140) return false;
   if (/^[A-Z\s\-]{4,}$/.test(front) && front.split(" ").length <= 5) return false;
-  if (/^(what is this|practice this|remember this|what should you remember)\??$/i.test(front)) return false;
+  if (
+    /^(what is this|practice this|remember this|what should you remember)\??$/i.test(
+      front
+    )
+  )
+    return false;
   if (/^what math idea does this teach\??$/i.test(front)) return false;
   if (new Set([front.toLowerCase(), back.toLowerCase()]).size < 2) return false;
 
@@ -416,6 +554,106 @@ function extractAllNumbers(text: string): number[] {
   return [...new Set(matches.map(Number).filter((n) => Number.isFinite(n)))];
 }
 
+/* ============================== QUIZ / FLASHCARD PROMPTS ============================== */
+
+function buildQuizPrompt(
+  lessonTitle: string,
+  topic: string,
+  transcript: string,
+  keyFacts: string[],
+  difficultyHints: string
+) {
+  return `
+Create exactly ${QUIZ_COUNT} multiple choice quiz questions for Grade 4.
+
+Lesson: ${lessonTitle}
+Topic: ${topic}
+
+Lesson notes:
+${transcript}
+
+Key facts:
+${formatKeyFactsForPrompt(keyFacts)}
+
+Difficulty ladder:
+${difficultyHints}
+
+Rules:
+- Use simple Grade 4 language
+- Exactly 10 questions
+- Each question must have 4 different options
+- Only one correct answer
+- The correct answer must exactly match one option
+- Keep questions clear and fair
+- Prefer math and lesson understanding
+- Make the difficulty rise slowly
+- Keep explanations short and helpful
+- No markdown tables
+- No extra commentary before or after
+
+Return exactly in this format:
+
+Q1: question
+A) option
+B) option
+C) option
+D) option
+ANS: exact option text
+WHY: short explanation
+
+Q2: question
+A) option
+B) option
+C) option
+D) option
+ANS: exact option text
+WHY: short explanation
+
+Continue until Q10.
+`.trim();
+}
+
+function buildFlashcardPrompt(
+  unitTitle: string,
+  transcript: string,
+  keyFacts: string[]
+) {
+  return `
+Create exactly ${FLASHCARD_COUNT} flashcards for Grade 4 revision.
+
+Unit: ${unitTitle}
+
+Lesson notes:
+${transcript}
+
+Key facts:
+${formatKeyFactsForPrompt(keyFacts)}
+
+Rules:
+- Exactly 10 flashcards
+- Short front
+- Short back
+- Very clear and useful
+- Good for memorizing lesson ideas
+- Use child-friendly English
+- No vague cards
+- No duplicate cards
+- No extra commentary
+
+Return exactly in this format:
+
+F1: front text
+B1: back text
+T1: topic
+
+F2: front text
+B2: back text
+T2: topic
+
+Continue until F10.
+`.trim();
+}
+
 /* ============================== LOCAL QUIZ BUILDERS ============================== */
 
 function buildLogicQuizFromFacts(
@@ -439,7 +677,11 @@ function buildLogicQuizFromFacts(
     const key = cleanQuestion.toLowerCase();
     if (!cleanQuestion || used.has(key)) return;
     if (dedupedOptions.length !== 4) return;
-    if (!dedupedOptions.some((opt) => opt.toLowerCase() === cleanCorrect.toLowerCase())) {
+    if (
+      !dedupedOptions.some(
+        (opt) => opt.toLowerCase() === cleanCorrect.toLowerCase()
+      )
+    ) {
       return;
     }
 
@@ -477,7 +719,9 @@ function buildLogicQuizFromFacts(
       }
     }
 
-    const expanded = fact.match(/(\d[\d,]*)\s*(?:=|is)\s*([\d,]+\s*\+\s*[\d,]+(?:\s*\+\s*[\d,]+)*)/i);
+    const expanded = fact.match(
+      /(\d[\d,]*)\s*(?:=|is)\s*([\d,]+\s*\+\s*[\d,]+(?:\s*\+\s*[\d,]+)*)/i
+    );
     if (expanded) {
       const number = normalizeSpace(expanded[1]);
       const form = normalizeSpace(expanded[2]);
@@ -501,7 +745,12 @@ function buildLogicQuizFromFacts(
       const c = Number(add[3]);
       push(
         `What is ${a} + ${b}?`,
-        [String(c), String(c + 10), String(Math.max(0, c - 10)), String(c + 1)],
+        [
+          String(c),
+          String(c + 10),
+          String(Math.max(0, c - 10)),
+          String(c + 1),
+        ],
         String(c),
         `Add the numbers carefully.`
       );
@@ -515,7 +764,12 @@ function buildLogicQuizFromFacts(
       const c = Number(sub[3]);
       push(
         `What is ${a} - ${b}?`,
-        [String(c), String(c + 10), String(Math.max(0, c - 10)), String(c + 1)],
+        [
+          String(c),
+          String(c + 10),
+          String(Math.max(0, c - 10)),
+          String(c + 1),
+        ],
         String(c),
         `Subtract step by step.`
       );
@@ -529,7 +783,12 @@ function buildLogicQuizFromFacts(
       const c = Number(mul[3]);
       push(
         `What is ${a} × ${b}?`,
-        [String(c), String(c + a), String(Math.max(0, c - a)), String(c + 1)],
+        [
+          String(c),
+          String(c + a),
+          String(Math.max(0, c - a)),
+          String(c + 1),
+        ],
         String(c),
         `Think of equal groups.`
       );
@@ -600,7 +859,12 @@ function buildQuickQuizFromNumbers(
       const sum = a + b;
       addQ(
         `What is ${a} + ${b}?`,
-        dedupeStrings([String(sum), String(sum + 1), String(Math.max(0, sum - 1)), String(sum + 2)]),
+        dedupeStrings([
+          String(sum),
+          String(sum + 1),
+          String(Math.max(0, sum - 1)),
+          String(sum + 2),
+        ]),
         String(sum),
         `Add ${a} and ${b}.`
       );
@@ -609,7 +873,12 @@ function buildQuickQuizFromNumbers(
         const diff = a - b;
         addQ(
           `What is ${a} - ${b}?`,
-          dedupeStrings([String(diff), String(diff + 1), String(Math.max(0, diff - 1)), String(diff + 2)]),
+          dedupeStrings([
+            String(diff),
+            String(diff + 1),
+            String(Math.max(0, diff - 1)),
+            String(diff + 2),
+          ]),
           String(diff),
           `Subtract ${b} from ${a}.`
         );
@@ -627,30 +896,69 @@ export async function generateQuizFromTranscript(
   lessonTitle: string,
   topic: string
 ): Promise<GeneratedQuestion[]> {
-  const cacheKey = `${lessonTitle}|||${topic}|||${pickRelevantTranscript(transcript, 500)}`;
+  const cacheKey = `${lessonTitle}|||${topic}|||${pickRelevantTranscript(
+    transcript,
+    500
+  )}`;
   const cached = quizCache.get(cacheKey);
   if (cached) return cached;
 
-  const compactTranscript = pickRelevantTranscript(transcript, 650);
+  const compactTranscript = pickRelevantTranscript(transcript, 700);
   const keyFacts = extractKeyFacts(compactTranscript, 8);
+  const difficultyHints = inferQuizLadder(topic, compactTranscript);
+
+  console.log("Quiz generation mode");
+  console.log("Lesson:", lessonTitle);
+  console.log("Topic:", topic);
+
+  let modelQuiz: GeneratedQuestion[] = [];
+
+  try {
+    const engine = await getContext(STUDY_MODEL);
+
+    const prompt = formatPromptForModel(
+      STUDY_MODEL,
+      [
+        {
+          id: "quiz-user",
+          role: "user",
+          content: buildQuizPrompt(
+            lessonTitle,
+            topic,
+            compactTranscript,
+            keyFacts,
+            difficultyHints
+          ),
+        },
+      ],
+      QUIZ_SYSTEM_PROMPT
+    );
+
+    const raw = await runCompletion(engine, prompt, {
+      n_predict: QUIZ_N_PREDICT,
+      temperature: QUIZ_TEMPERATURE,
+      top_p: 0.9,
+      top_k: 30,
+    });
+
+    modelQuiz = parseQuizResponse(raw, lessonTitle, topic);
+  } catch (e) {
+    console.log("Quiz model generation failed, using fallback path:", e);
+  } finally {
+    await releaseLoadedContext();
+  }
+
   const logicQuiz = buildLogicQuizFromFacts(keyFacts, topic);
   const quickQuiz = buildQuickQuizFromNumbers(compactTranscript, topic);
 
-  const difficultyHints = inferQuizLadder(topic, compactTranscript);
-  console.log("Quiz preload mode");
-  console.log("Lesson:", lessonTitle);
-  console.log("Topic:", topic);
-  console.log("Difficulty ladder:", difficultyHints);
-  console.log("Key facts:\n" + formatKeyFactsForPrompt(keyFacts));
-
-  const merged = dedupeQuestions([...logicQuiz, ...quickQuiz]);
+  const merged = dedupeQuestions([...modelQuiz, ...logicQuiz, ...quickQuiz]);
   const finalQuiz = fillQuizWithFallbacks(merged, topic).slice(0, QUIZ_COUNT);
 
   quizCache.set(cacheKey, finalQuiz);
   return finalQuiz;
 }
 
-/* ============================== FLASHCARD GENERATION ============================== */
+/* ============================== FLASHCARD HELPERS ============================== */
 
 function dedupeFlashcards(items: GeneratedFlashcard[]): GeneratedFlashcard[] {
   const seen = new Set<string>();
@@ -675,7 +983,40 @@ function dedupeFlashcards(items: GeneratedFlashcard[]): GeneratedFlashcard[] {
   return out;
 }
 
-function makeFlashcardFrontFromSentence(sentence: string, unitTitle: string): string {
+function parseFlashcardResponse(
+  response: string,
+  unitTitle: string
+): GeneratedFlashcard[] {
+  const txt = (response ?? "").replace(/\r\n/g, "\n").trim();
+  if (!txt) return [];
+
+  const out: GeneratedFlashcard[] = [];
+
+  for (let i = 1; i <= FLASHCARD_COUNT; i++) {
+    const front = txt.match(new RegExp(`^F${i}:\\s*(.+)$`, "m"))?.[1]?.trim();
+    const back = txt.match(new RegExp(`^B${i}:\\s*(.+)$`, "m"))?.[1]?.trim();
+    const topic = txt.match(new RegExp(`^T${i}:\\s*(.+)$`, "m"))?.[1]?.trim();
+
+    if (!front || !back) continue;
+
+    out.push({
+      id: i,
+      front: normalizeSpace(front),
+      back: normalizeSpace(back),
+      topic: normalizeSpace(topic || unitTitle),
+    });
+  }
+
+  return dedupeFlashcards(out)
+    .filter(isStrongFlashcard)
+    .slice(0, FLASHCARD_COUNT)
+    .map((card, index) => ({ ...card, id: index + 1 }));
+}
+
+function makeFlashcardFrontFromSentence(
+  sentence: string,
+  unitTitle: string
+): string {
   const s = normalizeSpace(sentence);
 
   const placeValueMatch = s.match(/value of (\d) in (\d+)/i);
@@ -683,9 +1024,13 @@ function makeFlashcardFrontFromSentence(sentence: string, unitTitle: string): st
     return `What is the value of ${placeValueMatch[1]} in ${placeValueMatch[2]}?`;
   }
 
-  const expandedMatch = s.match(/(\d[\d,]*)\s*(?:=|is)\s*([\d,]+\s*\+\s*[\d,]+(?:\s*\+\s*[\d,]+)*)/i);
+  const expandedMatch = s.match(
+    /(\d[\d,]*)\s*(?:=|is)\s*([\d,]+\s*\+\s*[\d,]+(?:\s*\+\s*[\d,]+)*)/i
+  );
   if (expandedMatch) {
-    return `What is the expanded form of ${normalizeSpace(expandedMatch[1])}?`;
+    return `What is the expanded form of ${normalizeSpace(
+      expandedMatch[1]
+    )}?`;
   }
 
   const isMatch = s.match(/^(.+?) is (.+)$/i);
@@ -704,7 +1049,10 @@ function makeFlashcardFrontFromSentence(sentence: string, unitTitle: string): st
   return `What do you learn in ${unitTitle}?`;
 }
 
-function buildLogicFlashcardsFromFacts(facts: string[], unitTitle: string): GeneratedFlashcard[] {
+function buildLogicFlashcardsFromFacts(
+  facts: string[],
+  unitTitle: string
+): GeneratedFlashcard[] {
   const out: GeneratedFlashcard[] = [];
   const used = new Set<string>();
 
@@ -732,14 +1080,24 @@ function buildLogicFlashcardsFromFacts(facts: string[], unitTitle: string): Gene
       const idx = number.indexOf(String(digit));
       if (idx >= 0) {
         const value = digit * Math.pow(10, number.length - idx - 1);
-        push(`What is the value of ${digit} in ${number}?`, String(value), "Place Value");
+        push(
+          `What is the value of ${digit} in ${number}?`,
+          String(value),
+          "Place Value"
+        );
         continue;
       }
     }
 
-    const expanded = fact.match(/(\d[\d,]*)\s*(?:=|is)\s*([\d,]+\s*\+\s*[\d,]+(?:\s*\+\s*[\d,]+)*)/i);
+    const expanded = fact.match(
+      /(\d[\d,]*)\s*(?:=|is)\s*([\d,]+\s*\+\s*[\d,]+(?:\s*\+\s*[\d,]+)*)/i
+    );
     if (expanded) {
-      push(`What is the expanded form of ${normalizeSpace(expanded[1])}?`, normalizeSpace(expanded[2]), "Expanded Form");
+      push(
+        `What is the expanded form of ${normalizeSpace(expanded[1])}?`,
+        normalizeSpace(expanded[2]),
+        "Expanded Form"
+      );
       continue;
     }
 
@@ -868,6 +1226,8 @@ function buildQuickFlashcardsFromNumbers(
   return dedupeFlashcards(out).filter(isStrongFlashcard).slice(0, 4);
 }
 
+/* ============================== FLASHCARD GENERATION ============================== */
+
 export async function generateFlashcardsFromTranscript(
   transcript: string,
   unitTitle: string
@@ -876,17 +1236,56 @@ export async function generateFlashcardsFromTranscript(
   const cached = flashcardCache.get(cacheKey);
   if (cached) return cached;
 
-  const compactTranscript = pickRelevantTranscript(transcript, 500);
+  const compactTranscript = pickRelevantTranscript(transcript, 550);
   const keyFacts = extractKeyFacts(compactTranscript, 8);
+
+  console.log("Flashcard generation mode");
+  console.log("Unit:", unitTitle);
+
+  let modelCards: GeneratedFlashcard[] = [];
+
+  try {
+    const engine = await getContext(STUDY_MODEL);
+
+    const prompt = formatPromptForModel(
+      STUDY_MODEL,
+      [
+        {
+          id: "flashcard-user",
+          role: "user",
+          content: buildFlashcardPrompt(unitTitle, compactTranscript, keyFacts),
+        },
+      ],
+      FLASHCARD_SYSTEM_PROMPT
+    );
+
+    const raw = await runCompletion(engine, prompt, {
+      n_predict: FLASHCARD_N_PREDICT,
+      temperature: FLASHCARD_TEMPERATURE,
+      top_p: 0.9,
+      top_k: 30,
+    });
+
+    modelCards = parseFlashcardResponse(raw, unitTitle);
+  } catch (e) {
+    console.log("Flashcard model generation failed, using fallback path:", e);
+  } finally {
+    await releaseLoadedContext();
+  }
+
   const logicCards = buildLogicFlashcardsFromFacts(keyFacts, unitTitle);
-  const quickCards = buildQuickFlashcardsFromNumbers(compactTranscript, unitTitle);
+  const quickCards = buildQuickFlashcardsFromNumbers(
+    compactTranscript,
+    unitTitle
+  );
   const fallback = buildFlashcardFallback(compactTranscript, unitTitle);
 
-  console.log("Flashcard preload mode");
-  console.log("Unit:", unitTitle);
-  console.log("Key facts:\n" + formatKeyFactsForPrompt(keyFacts));
-
-  const merged = dedupeFlashcards([...logicCards, ...quickCards, ...fallback])
+  const merged = dedupeFlashcards([
+    ...modelCards,
+    ...logicCards,
+    ...quickCards,
+    ...fallback,
+  ])
     .filter(isStrongFlashcard)
     .slice(0, FLASHCARD_COUNT)
     .map((card, index) => ({ ...card, id: index + 1 }));
@@ -952,7 +1351,7 @@ function parseQuizResponse(
     });
   }
 
-  return out.slice(0, 4);
+  return out.slice(0, QUIZ_COUNT);
 }
 
 /* ============================== QUIZ FIXERS ============================== */
@@ -1038,7 +1437,8 @@ function fixQuestionMath(q: GeneratedQuestion): GeneratedQuestion {
     const matched =
       options.find(
         (opt) =>
-          normalizeSpace(opt).toLowerCase() === placeValueAnswer.toLowerCase()
+          normalizeSpace(opt).toLowerCase() ===
+          placeValueAnswer.toLowerCase()
       ) ||
       options.find((opt) => normalizeSpace(opt).includes(placeValueAnswer));
 
@@ -1214,258 +1614,48 @@ function getPlaceValueFallback(topic: string): GeneratedQuestion[] {
 function getAdditionSubtractionFallback(topic: string): GeneratedQuestion[] {
   const base = Date.now() + 1000;
   return [
-    makeQ(
-      base + 1,
-      topic,
-      "What is 36 + 24?",
-      ["50", "60", "62", "72"],
-      "60",
-      "36 + 24 = 60."
-    ),
-    makeQ(
-      base + 2,
-      topic,
-      "What is 75 - 18?",
-      ["57", "67", "63", "56"],
-      "57",
-      "75 - 18 = 57."
-    ),
-    makeQ(
-      base + 3,
-      topic,
-      "What is 48 + 12?",
-      ["50", "60", "70", "58"],
-      "60",
-      "48 + 12 = 60."
-    ),
-    makeQ(
-      base + 4,
-      topic,
-      "What is 90 - 25?",
-      ["75", "65", "55", "60"],
-      "65",
-      "90 - 25 = 65."
-    ),
-    makeQ(
-      base + 5,
-      topic,
-      "Which sum is correct?",
-      ["23 + 14 = 37", "23 + 14 = 36", "23 + 14 = 35", "23 + 14 = 38"],
-      "23 + 14 = 37",
-      "23 plus 14 equals 37."
-    ),
-    makeQ(
-      base + 6,
-      topic,
-      "Which difference is correct?",
-      ["54 - 21 = 33", "54 - 21 = 23", "54 - 21 = 43", "54 - 21 = 31"],
-      "54 - 21 = 33",
-      "54 minus 21 equals 33."
-    ),
-    makeQ(
-      base + 7,
-      topic,
-      "What is 67 + 5?",
-      ["71", "72", "73", "74"],
-      "72",
-      "67 + 5 = 72."
-    ),
-    makeQ(
-      base + 8,
-      topic,
-      "What is 100 - 46?",
-      ["54", "64", "44", "56"],
-      "54",
-      "100 - 46 = 54."
-    ),
-    makeQ(
-      base + 9,
-      topic,
-      "What is 29 + 30?",
-      ["49", "59", "69", "39"],
-      "59",
-      "29 + 30 = 59."
-    ),
-    makeQ(
-      base + 10,
-      topic,
-      "What is 81 - 9?",
-      ["71", "72", "73", "74"],
-      "72",
-      "81 - 9 = 72."
-    ),
+    makeQ(base + 1, topic, "What is 36 + 24?", ["50", "60", "62", "72"], "60", "36 + 24 = 60."),
+    makeQ(base + 2, topic, "What is 75 - 18?", ["57", "67", "63", "56"], "57", "75 - 18 = 57."),
+    makeQ(base + 3, topic, "What is 48 + 12?", ["50", "60", "70", "58"], "60", "48 + 12 = 60."),
+    makeQ(base + 4, topic, "What is 90 - 25?", ["75", "65", "55", "60"], "65", "90 - 25 = 65."),
+    makeQ(base + 5, topic, "Which sum is correct?", ["23 + 14 = 37", "23 + 14 = 36", "23 + 14 = 35", "23 + 14 = 38"], "23 + 14 = 37", "23 plus 14 equals 37."),
+    makeQ(base + 6, topic, "Which difference is correct?", ["54 - 21 = 33", "54 - 21 = 23", "54 - 21 = 43", "54 - 21 = 31"], "54 - 21 = 33", "54 minus 21 equals 33."),
+    makeQ(base + 7, topic, "What is 67 + 5?", ["71", "72", "73", "74"], "72", "67 + 5 = 72."),
+    makeQ(base + 8, topic, "What is 100 - 46?", ["54", "64", "44", "56"], "54", "100 - 46 = 54."),
+    makeQ(base + 9, topic, "What is 29 + 30?", ["49", "59", "69", "39"], "59", "29 + 30 = 59."),
+    makeQ(base + 10, topic, "What is 81 - 9?", ["71", "72", "73", "74"], "72", "81 - 9 = 72."),
   ];
 }
 
 function getMultiplicationFallback(topic: string): GeneratedQuestion[] {
   const base = Date.now() + 2000;
   return [
-    makeQ(
-      base + 1,
-      topic,
-      "What is 4 × 3?",
-      ["7", "12", "8", "16"],
-      "12",
-      "4 groups of 3 is 12."
-    ),
-    makeQ(
-      base + 2,
-      topic,
-      "What is 6 × 5?",
-      ["30", "25", "35", "20"],
-      "30",
-      "6 times 5 is 30."
-    ),
-    makeQ(
-      base + 3,
-      topic,
-      "What is 7 × 2?",
-      ["14", "12", "16", "10"],
-      "14",
-      "7 times 2 is 14."
-    ),
-    makeQ(
-      base + 4,
-      topic,
-      "What is 9 × 3?",
-      ["18", "21", "27", "24"],
-      "27",
-      "9 times 3 is 27."
-    ),
-    makeQ(
-      base + 5,
-      topic,
-      "What is 8 × 4?",
-      ["28", "30", "32", "36"],
-      "32",
-      "8 times 4 is 32."
-    ),
-    makeQ(
-      base + 6,
-      topic,
-      "Which multiplication fact is correct?",
-      ["5 × 4 = 20", "5 × 4 = 15", "5 × 4 = 25", "5 × 4 = 10"],
-      "5 × 4 = 20",
-      "5 groups of 4 is 20."
-    ),
-    makeQ(
-      base + 7,
-      topic,
-      "What is 3 × 10?",
-      ["13", "30", "20", "40"],
-      "30",
-      "3 times 10 is 30."
-    ),
-    makeQ(
-      base + 8,
-      topic,
-      "What is 2 × 9?",
-      ["18", "16", "20", "12"],
-      "18",
-      "2 times 9 is 18."
-    ),
-    makeQ(
-      base + 9,
-      topic,
-      "What is 7 × 7?",
-      ["42", "48", "49", "56"],
-      "49",
-      "7 times 7 is 49."
-    ),
-    makeQ(
-      base + 10,
-      topic,
-      "What is 5 × 8?",
-      ["35", "40", "45", "30"],
-      "40",
-      "5 times 8 is 40."
-    ),
+    makeQ(base + 1, topic, "What is 4 × 3?", ["7", "12", "8", "16"], "12", "4 groups of 3 is 12."),
+    makeQ(base + 2, topic, "What is 6 × 5?", ["30", "25", "35", "20"], "30", "6 times 5 is 30."),
+    makeQ(base + 3, topic, "What is 7 × 2?", ["14", "12", "16", "10"], "14", "7 times 2 is 14."),
+    makeQ(base + 4, topic, "What is 9 × 3?", ["18", "21", "27", "24"], "27", "9 times 3 is 27."),
+    makeQ(base + 5, topic, "What is 8 × 4?", ["28", "30", "32", "36"], "32", "8 times 4 is 32."),
+    makeQ(base + 6, topic, "Which multiplication fact is correct?", ["5 × 4 = 20", "5 × 4 = 15", "5 × 4 = 25", "5 × 4 = 10"], "5 × 4 = 20", "5 groups of 4 is 20."),
+    makeQ(base + 7, topic, "What is 3 × 10?", ["13", "30", "20", "40"], "30", "3 times 10 is 30."),
+    makeQ(base + 8, topic, "What is 2 × 9?", ["18", "16", "20", "12"], "18", "2 times 9 is 18."),
+    makeQ(base + 9, topic, "What is 7 × 7?", ["42", "48", "49", "56"], "49", "7 times 7 is 49."),
+    makeQ(base + 10, topic, "What is 5 × 8?", ["35", "40", "45", "30"], "40", "5 times 8 is 40."),
   ];
 }
 
 function getDivisionFallback(topic: string): GeneratedQuestion[] {
   const base = Date.now() + 3000;
   return [
-    makeQ(
-      base + 1,
-      topic,
-      "What is 12 ÷ 3?",
-      ["2", "3", "4", "6"],
-      "4",
-      "12 split into 3 equal groups is 4."
-    ),
-    makeQ(
-      base + 2,
-      topic,
-      "What is 20 ÷ 5?",
-      ["2", "4", "5", "10"],
-      "4",
-      "20 divided by 5 is 4."
-    ),
-    makeQ(
-      base + 3,
-      topic,
-      "What is 18 ÷ 2?",
-      ["8", "9", "6", "7"],
-      "9",
-      "18 divided by 2 is 9."
-    ),
-    makeQ(
-      base + 4,
-      topic,
-      "What is 24 ÷ 6?",
-      ["3", "4", "5", "6"],
-      "4",
-      "24 divided by 6 is 4."
-    ),
-    makeQ(
-      base + 5,
-      topic,
-      "What is 16 ÷ 4?",
-      ["2", "4", "6", "8"],
-      "4",
-      "16 divided by 4 is 4."
-    ),
-    makeQ(
-      base + 6,
-      topic,
-      "Which division fact is correct?",
-      ["15 ÷ 3 = 5", "15 ÷ 3 = 4", "15 ÷ 3 = 6", "15 ÷ 3 = 3"],
-      "15 ÷ 3 = 5",
-      "15 divided by 3 is 5."
-    ),
-    makeQ(
-      base + 7,
-      topic,
-      "What is 30 ÷ 5?",
-      ["5", "6", "7", "8"],
-      "6",
-      "30 divided by 5 is 6."
-    ),
-    makeQ(
-      base + 8,
-      topic,
-      "What is 21 ÷ 7?",
-      ["2", "3", "4", "5"],
-      "3",
-      "21 divided by 7 is 3."
-    ),
-    makeQ(
-      base + 9,
-      topic,
-      "What is 27 ÷ 9?",
-      ["2", "3", "4", "5"],
-      "3",
-      "27 divided by 9 is 3."
-    ),
-    makeQ(
-      base + 10,
-      topic,
-      "What is 14 ÷ 7?",
-      ["1", "2", "3", "4"],
-      "2",
-      "14 divided by 7 is 2."
-    ),
+    makeQ(base + 1, topic, "What is 12 ÷ 3?", ["2", "3", "4", "6"], "4", "12 split into 3 equal groups is 4."),
+    makeQ(base + 2, topic, "What is 20 ÷ 5?", ["2", "4", "5", "10"], "4", "20 divided by 5 is 4."),
+    makeQ(base + 3, topic, "What is 18 ÷ 2?", ["8", "9", "6", "7"], "9", "18 divided by 2 is 9."),
+    makeQ(base + 4, topic, "What is 24 ÷ 6?", ["3", "4", "5", "6"], "4", "24 divided by 6 is 4."),
+    makeQ(base + 5, topic, "What is 16 ÷ 4?", ["2", "4", "6", "8"], "4", "16 divided by 4 is 4."),
+    makeQ(base + 6, topic, "Which division fact is correct?", ["15 ÷ 3 = 5", "15 ÷ 3 = 4", "15 ÷ 3 = 6", "15 ÷ 3 = 3"], "15 ÷ 3 = 5", "15 divided by 3 is 5."),
+    makeQ(base + 7, topic, "What is 30 ÷ 5?", ["5", "6", "7", "8"], "6", "30 divided by 5 is 6."),
+    makeQ(base + 8, topic, "What is 21 ÷ 7?", ["2", "3", "4", "5"], "3", "21 divided by 7 is 3."),
+    makeQ(base + 9, topic, "What is 27 ÷ 9?", ["2", "3", "4", "5"], "3", "27 divided by 9 is 3."),
+    makeQ(base + 10, topic, "What is 14 ÷ 7?", ["1", "2", "3", "4"], "2", "14 divided by 7 is 2."),
   ];
 }
 
@@ -1554,13 +1744,31 @@ function isGreeting(text: string): boolean {
   );
 }
 
+async function generateDirectChat(
+  engine: LlamaContext,
+  recentHistory: Message[]
+): Promise<string> {
+  const prompt = formatPromptForModel(
+    CHAT_MODEL,
+    recentHistory,
+    DEFAULT_SYSTEM_PROMPT
+  );
+
+  return runCompletion(engine, prompt, {
+    n_predict: CHAT_N_PREDICT,
+    temperature: CHAT_TEMPERATURE,
+    top_p: 0.9,
+    top_k: 30,
+  });
+}
+
 export async function callAI(history: Message[]): Promise<Message> {
   if (aiState === "downloading") {
     const pct = aiProgress ? `${aiProgress.percent.toFixed(1)}%` : "";
     return {
       id: "dl",
       role: "assistant",
-      content: `Downloading my AI brain… 🧠 ${pct}`.trim(),
+      content: `Preparing AI… ${pct}`.trim(),
     };
   }
 
@@ -1568,7 +1776,7 @@ export async function callAI(history: Message[]): Promise<Message> {
     return {
       id: "ld",
       role: "assistant",
-      content: "Warming up… 🔥 Almost ready!",
+      content: "Loading AI… Almost ready!",
     };
   }
 
@@ -1586,7 +1794,7 @@ export async function callAI(history: Message[]): Promise<Message> {
     return {
       id: "empty",
       role: "assistant",
-      content: "I'm Offklass AI. Tell me your grade and math topic 😊",
+      content: "Hi! Ask me anything and I will help you learn 😊",
     };
   }
 
@@ -1594,49 +1802,32 @@ export async function callAI(history: Message[]): Promise<Message> {
     return {
       id: "greet",
       role: "assistant",
-      content: "Hi! I can help you with Grade 4 math. What topic are you learning? 😊",
+      content:
+        "Hi! I’m your Offklass Buddy. Ask me any question and I’ll help in a simple way 😊",
     };
   }
 
-  if (lastUser) {
-    const fallback = tryMathFallback(lastUser.content);
-    if (fallback) {
-      return {
-        id: Date.now().toString(),
-        role: "assistant",
-        content: fallback,
-      };
-    }
+  const fallback = tryMathFallback(lastUser.content);
+  if (fallback) {
+    return {
+      id: Date.now().toString(),
+      role: "assistant",
+      content: fallback,
+    };
   }
 
   inflight = (async () => {
     try {
-      const engine = await getContext(ACTIVE_MODEL);
-
+      const engine = await getContext(CHAT_MODEL);
       const startTime = Date.now();
-      console.log("AI response started at:", startTime);
 
-      const recentHistory = history.slice(-5);
-
-      const { text } = await engine.completion({
-        prompt: formatMessagesForSmolLM(recentHistory),
-        n_predict: CHAT_N_PREDICT,
-        temperature: 0.3,
-        top_p: 0.85,
-        top_k: 20,
-        stop: ["User:", "System:"],
-      });
+      const recentHistory = history.slice(-4);
+      const cleaned = await generateDirectChat(engine, recentHistory);
 
       const endTime = Date.now();
       const responseTime = endTime - startTime;
 
-      console.warn("AI response ended at:", endTime);
-      console.warn("AI response time:", responseTime, "ms");
-      console.warn(
-        `AI response time: ${(responseTime / 1000).toFixed(2)} seconds`
-      );
-
-      const cleaned = cleanModelOutput(text);
+      console.log("AI response completed in:", responseTime, "ms");
 
       return {
         id: Date.now().toString(),
@@ -1670,27 +1861,31 @@ export function getGeneratedStudyCacheInfo() {
 
 /* ============================== UTILS ============================== */
 
-export async function warmupAI(): Promise<void> {
+export async function warmupAI(model: ModelChoice = STUDY_MODEL): Promise<void> {
   try {
-    if (!(await isModelDownloaded())) return;
-    const engine = await getContext(ACTIVE_MODEL);
+    if (!(await isModelDownloaded(model))) return;
+    const engine = await getContext(model);
+
     await engine.completion({
-      prompt: "System:\nYou are ready.\n\nAssistant:\n",
-      n_predict: 1,
+      prompt: formatPromptForModel(
+        model,
+        [{ id: "warmup", role: "user", content: "Say ready." }],
+        "You are ready."
+      ),
+      n_predict: 8,
+      temperature: 0.1,
+      stop: ["<end_of_turn>", "User:"],
     });
+
+    if (model === STUDY_MODEL) {
+      await releaseLoadedContext();
+    }
   } catch {}
 }
 
 export async function releaseContext(): Promise<void> {
-  try {
-    if (ctx) {
-      await ctx.release();
-      ctx = null;
-      loadedModel = null;
-    }
-  } finally {
-    aiProgress = null;
-    clearGeneratedStudyCaches();
-    setState("idle");
-  }
+  await releaseLoadedContext({
+    resetState: true,
+    clearCaches: true,
+  });
 }

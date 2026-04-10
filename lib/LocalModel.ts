@@ -1,22 +1,32 @@
-// lib/LocalModel.ts
 import * as FileSystem from "expo-file-system";
 
-export type ModelChoice = "smollm2";
+export type ModelChoice = "smollm2" | "gemma4e2b";
 
-// Must match your GGUF filename exactly
-const FILENAME = "smollm2-1.7b-instruct-q4_k_m.gguf";
+type ModelSpec = {
+  filename: string;
+  url: string;
+  expectedMinSize: number;
+  expectedMaxSize: number;
+};
 
-const URL =
-  "https://huggingface.co/bartowski/SmolLM2-1.7B-Instruct-GGUF/resolve/main/SmolLM2-1.7B-Instruct-Q4_K_M.gguf";
+const MODEL_SPECS: Record<ModelChoice, ModelSpec> = {
+  smollm2: {
+    filename: "smollm2-1.7b-instruct-q4_k_m.gguf",
+    url:
+      "https://huggingface.co/bartowski/SmolLM2-1.7B-Instruct-GGUF/resolve/main/SmolLM2-1.7B-Instruct-Q4_K_M.gguf",
+    expectedMinSize: 900_000_000,
+    expectedMaxSize: 1_400_000_000,
+  },
+  gemma4e2b: {
+    filename: "google_gemma-4-E2B-it-IQ2_M.gguf",
+    url:
+      "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-IQ2_M.gguf",
+    expectedMinSize: 2_300_000_000,
+    expectedMaxSize: 2_900_000_000,
+  },
+};
 
-/**
- * SmolLM2 1.7B Q4_K_M is much smaller than Gemma 2B.
- * These size bounds are intentionally tolerant.
- */
-const EXPECTED_MIN_SIZE = 700_000_000; // 700 MB
-const EXPECTED_MAX_SIZE = 1_500_000_000; // 1.5 GB
-
-let cachedModelPath: string | null = null;
+const cachedModelPaths: Partial<Record<ModelChoice, string>> = {};
 
 function toFileUri(path: string) {
   return path.startsWith("file://") ? path : `file://${path}`;
@@ -28,30 +38,52 @@ export type DownloadProgress = {
   total: number;
 };
 
-async function ensureDownloaded(
-  onProgress?: (p: DownloadProgress) => void
-): Promise<string> {
-  if (cachedModelPath) return cachedModelPath;
-
-  const dir = FileSystem.documentDirectory!;
-  const dest = `${dir}${FILENAME}`;
-
-  const info = await FileSystem.getInfoAsync(dest);
-
-  if (info.exists) {
-    const size = info.size ?? 0;
-    if (size >= EXPECTED_MIN_SIZE && size <= EXPECTED_MAX_SIZE) {
-      cachedModelPath = toFileUri(dest);
-      return cachedModelPath;
-    } else {
-      await FileSystem.deleteAsync(dest, { idempotent: true }).catch(() => {});
-    }
+async function getDestinationPath(choice: ModelChoice) {
+  const dir = FileSystem.documentDirectory;
+  if (!dir) {
+    throw new Error("Document directory is unavailable on this device.");
   }
 
-  const tmp = `${dest}.part`;
-  await FileSystem.deleteAsync(tmp, { idempotent: true }).catch(() => {});
+  return `${dir}${MODEL_SPECS[choice].filename}`;
+}
 
-  const dl = FileSystem.createDownloadResumable(URL, tmp, {}, (progress) => {
+async function validateExistingFile(
+  path: string,
+  choice: ModelChoice
+): Promise<boolean> {
+  const info = await FileSystem.getInfoAsync(path);
+  if (!info.exists) return false;
+
+  const size = info.size ?? 0;
+  const spec = MODEL_SPECS[choice];
+  return size >= spec.expectedMinSize && size <= spec.expectedMaxSize;
+}
+
+async function cleanupFile(path: string) {
+  await FileSystem.deleteAsync(path, { idempotent: true }).catch(() => {});
+}
+
+async function ensureDownloaded(
+  choice: ModelChoice,
+  onProgress?: (p: DownloadProgress) => void
+): Promise<string> {
+  if (cachedModelPaths[choice]) return cachedModelPaths[choice]!;
+
+  const spec = MODEL_SPECS[choice];
+  const dest = await getDestinationPath(choice);
+
+  const isValid = await validateExistingFile(dest, choice);
+  if (isValid) {
+    cachedModelPaths[choice] = toFileUri(dest);
+    return cachedModelPaths[choice]!;
+  }
+
+  await cleanupFile(dest);
+
+  const tmp = `${dest}.part`;
+  await cleanupFile(tmp);
+
+  const dl = FileSystem.createDownloadResumable(spec.url, tmp, {}, (progress) => {
     const total = progress.totalBytesExpectedToWrite || 1;
     const written = progress.totalBytesWritten || 0;
     const percent = Math.max(0, Math.min(100, (written / total) * 100));
@@ -64,71 +96,97 @@ async function ensureDownloaded(
   });
 
   const result = await dl.downloadAsync();
-  if (!result) throw new Error("Download failed");
+  if (!result) {
+    throw new Error(`${choice} model download failed.`);
+  }
 
   await FileSystem.moveAsync({ from: tmp, to: dest });
-
-  await new Promise((r) => setTimeout(r, 400));
+  await new Promise((r) => setTimeout(r, 500));
 
   const finalInfo = await FileSystem.getInfoAsync(dest);
   const finalSize = finalInfo.exists ? (finalInfo.size ?? 0) : 0;
 
-  if (finalSize < EXPECTED_MIN_SIZE || finalSize > EXPECTED_MAX_SIZE) {
-    await FileSystem.deleteAsync(dest, { idempotent: true }).catch(() => {});
+  if (
+    finalSize < spec.expectedMinSize ||
+    finalSize > spec.expectedMaxSize
+  ) {
+    await cleanupFile(dest);
     throw new Error(
-      `Downloaded file size looks wrong: ${(finalSize / 1_000_000).toFixed(0)} MB`
+      `Downloaded ${choice} file size looks wrong: ${(finalSize / 1_000_000_000).toFixed(
+        2
+      )} GB`
     );
   }
 
-  cachedModelPath = toFileUri(dest);
-  return cachedModelPath;
+  cachedModelPaths[choice] = toFileUri(dest);
+  return cachedModelPaths[choice]!;
 }
 
 /* ------------------------------ PUBLIC API ------------------------------ */
 
 export async function ensureModel(
+  choice: ModelChoice,
   onProgress?: (p: DownloadProgress) => void
 ): Promise<string> {
-  return ensureDownloaded(onProgress);
+  return ensureDownloaded(choice, onProgress);
 }
 
-export async function isModelDownloaded(choice?: ModelChoice): Promise<boolean> {
-  if (choice && choice !== "smollm2") return false;
-  if (cachedModelPath) return true;
-
-  const dir = FileSystem.documentDirectory!;
-  const dest = `${dir}${FILENAME}`;
-  const info = await FileSystem.getInfoAsync(dest);
-
-  if (!info.exists) return false;
-
-  const size = info.size ?? 0;
-  return size >= EXPECTED_MIN_SIZE && size <= EXPECTED_MAX_SIZE;
+export async function isModelDownloaded(choice: ModelChoice): Promise<boolean> {
+  if (cachedModelPaths[choice]) return true;
+  const dest = await getDestinationPath(choice);
+  return validateExistingFile(dest, choice);
 }
 
-export async function deleteModel(choice?: ModelChoice): Promise<void> {
-  if (choice && choice !== "smollm2") return;
+export async function deleteModel(choice: ModelChoice): Promise<void> {
+  const dest = await getDestinationPath(choice);
+  await cleanupFile(dest);
 
-  const dir = FileSystem.documentDirectory!;
-  const dest = `${dir}${FILENAME}`;
-  await FileSystem.deleteAsync(dest, { idempotent: true }).catch(() => {});
-  cachedModelPath = null;
+  const tmp = `${dest}.part`;
+  await cleanupFile(tmp);
+
+  delete cachedModelPaths[choice];
 }
 
-export async function getModelInfo(): Promise<{
+export async function getModelInfo(choice: ModelChoice): Promise<{
+  model: ModelChoice;
   exists: boolean;
   size?: number;
   path?: string;
-  filename?: string;
+  filename: string;
+  expectedMinSize: number;
+  expectedMaxSize: number;
+  downloadUrl: string;
 }> {
-  const dir = FileSystem.documentDirectory!;
-  const dest = `${dir}${FILENAME}`;
+  const spec = MODEL_SPECS[choice];
+  const dest = await getDestinationPath(choice);
   const info = await FileSystem.getInfoAsync(dest);
 
   return {
+    model: choice,
     exists: info.exists,
     size: info.exists ? info.size : undefined,
     path: info.exists ? dest : undefined,
-    filename: FILENAME,
+    filename: spec.filename,
+    expectedMinSize: spec.expectedMinSize,
+    expectedMaxSize: spec.expectedMaxSize,
+    downloadUrl: spec.url,
   };
+}
+
+export async function getAllModelInfo(): Promise<
+  Array<{
+    model: ModelChoice;
+    exists: boolean;
+    size?: number;
+    path?: string;
+    filename: string;
+    expectedMinSize: number;
+    expectedMaxSize: number;
+    downloadUrl: string;
+  }>
+> {
+  return Promise.all([
+    getModelInfo("smollm2"),
+    getModelInfo("gemma4e2b"),
+  ]);
 }

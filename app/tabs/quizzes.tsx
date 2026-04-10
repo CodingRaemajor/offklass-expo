@@ -1,5 +1,5 @@
 // app/(tabs)/quizzes.tsx
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -20,7 +20,12 @@ import { loadJSON, ONBOARD_KEY, type OnboardingData } from "../../lib/storage";
 import { NextStepFooter } from "../../components/NextStepFooter";
 import { generateQuizFromTranscript } from "../../lib/ai.local";
 import { getQuizBankByUnit } from "../../lib/quizBank";
-import { LESSON_INFO, getCombinedTranscriptByUnit, getLessonInfoByUnit, getQuizTopicByUnit } from "../../lib/lessonTranscripts";
+import {
+  LESSON_INFO,
+  getCombinedTranscriptByUnit,
+  getLessonInfoByUnit,
+  getQuizTopicByUnit,
+} from "../../lib/lessonTranscripts";
 
 /* ----------------------------- Types ---------------------------- */
 
@@ -100,7 +105,9 @@ const L10N: Record<
     aiFailSub: string;
     tryAgain: string;
 
-    preloadingHint: string;
+    choosePrompt: string;
+    generateWithAI: string;
+    useBackupQuiz: string;
   }
 > = {
   English: {
@@ -120,7 +127,7 @@ const L10N: Record<
     doneTitle: "Challenge Complete!",
     doneScore: (s, t) => `You scored ${s} / ${t}`,
     playAgain: "Play Again",
-    generateQuiz: "Generate Quiz",
+    generateQuiz: "Choose What to Generate",
     changeUnit: "Choose Another Unit",
     practiceBtn: "Practice Wrong Questions",
     noWrong: "Perfect! No wrong questions 🎉",
@@ -142,9 +149,9 @@ const L10N: Record<
     gotIt: "Got it!",
 
     lobbyTitle: "Quiz Adventure",
-    lobbySub: "Choose a unit first, then press Start Challenge.",
+    lobbySub: "Choose a unit first, then choose how to generate your quiz.",
     chooseUnit: "Choose Unit",
-    startChallenge: "Start Challenge",
+    startChallenge: "Choose What to Generate",
     gameReady: "Game Ready",
     unitLabel: "Unit",
     challengeMode: "Challenge Mode",
@@ -153,10 +160,12 @@ const L10N: Record<
     selected: "Selected",
 
     aiFailTitle: "AI quiz could not be generated",
-    aiFailSub: "Please try again. Make sure the local AI model is ready.",
+    aiFailSub: "Showing backup quiz instead.",
     tryAgain: "Try Again",
 
-    preloadingHint: "Preparing your quiz in the background…",
+    choosePrompt: "What would you like to generate?",
+    generateWithAI: "Generate Quiz with AI",
+    useBackupQuiz: "Use Backup Quiz",
   },
 
   नेपाली: {
@@ -176,7 +185,7 @@ const L10N: Record<
     doneTitle: "च्यालेन्ज पूरा!",
     doneScore: (s, t) => `तपाईंको स्कोर ${s} / ${t}`,
     playAgain: "फेरि खेल्नुहोस्",
-    generateQuiz: "नयाँ क्विज बनाउनुहोस्",
+    generateQuiz: "के बनाउने छान्नुहोस्",
     changeUnit: "अर्को युनिट छान्नुहोस्",
     practiceBtn: "गलत प्रश्न अभ्यास गर्नुहोस्",
     noWrong: "धेरै राम्रो! कुनै गलत छैन 🎉",
@@ -198,9 +207,9 @@ const L10N: Record<
     gotIt: "बुझें!",
 
     lobbyTitle: "क्विज एडभेन्चर",
-    lobbySub: "पहिले युनिट छान्नुहोस्, अनि Start Challenge थिच्नुहोस्।",
+    lobbySub: "पहिले युनिट छान्नुहोस्, अनि कसरी क्विज बनाउने छान्नुहोस्।",
     chooseUnit: "युनिट छान्नुहोस्",
-    startChallenge: "च्यालेन्ज सुरु गर्नुहोस्",
+    startChallenge: "के बनाउने छान्नुहोस्",
     gameReady: "खेल तयार",
     unitLabel: "युनिट",
     challengeMode: "च्यालेन्ज मोड",
@@ -209,10 +218,12 @@ const L10N: Record<
     selected: "छानिएको",
 
     aiFailTitle: "AI क्विज बनाउन सकिएन",
-    aiFailSub: "कृपया फेरि प्रयास गर्नुहोस्। Local AI model तयार भएको सुनिश्चित गर्नुहोस्।",
+    aiFailSub: "ब्याकअप क्विज देखाइँदैछ।",
     tryAgain: "फेरि प्रयास गर्नुहोस्",
 
-    preloadingHint: "पृष्ठभूमिमा क्विज तयार हुँदैछ…",
+    choosePrompt: "तपाईं के बनाउन चाहनुहुन्छ?",
+    generateWithAI: "AI बाट क्विज बनाउनुहोस्",
+    useBackupQuiz: "ब्याकअप क्विज प्रयोग गर्नुहोस्",
   },
 
   اردو: {
@@ -232,7 +243,7 @@ const L10N: Record<
     doneTitle: "چیلنج مکمل!",
     doneScore: (s, t) => `آپ کا اسکور ${s} / ${t}`,
     playAgain: "دوبارہ کھیلیں",
-    generateQuiz: "نیا کوئز بنائیں",
+    generateQuiz: "منتخب کریں کیا بنانا ہے",
     changeUnit: "دوسرا یونٹ منتخب کریں",
     practiceBtn: "غلط سوالات کی مشق",
     noWrong: "زبردست! کوئی غلط نہیں 🎉",
@@ -254,9 +265,9 @@ const L10N: Record<
     gotIt: "سمجھ گیا!",
 
     lobbyTitle: "کوئز ایڈونچر",
-    lobbySub: "پہلے یونٹ منتخب کریں، پھر Start Challenge دبائیں۔",
+    lobbySub: "پہلے یونٹ منتخب کریں، پھر منتخب کریں کہ کوئز کیسے بنانا ہے۔",
     chooseUnit: "یونٹ منتخب کریں",
-    startChallenge: "چیلنج شروع کریں",
+    startChallenge: "منتخب کریں کیا بنانا ہے",
     gameReady: "گیم تیار",
     unitLabel: "یونٹ",
     challengeMode: "چیلنج موڈ",
@@ -265,10 +276,12 @@ const L10N: Record<
     selected: "منتخب",
 
     aiFailTitle: "AI کوئز تیار نہیں ہو سکا",
-    aiFailSub: "براہ کرم دوبارہ کوشش کریں۔ Local AI model ready ہونا چاہیے۔",
+    aiFailSub: "بیک اپ کوئز دکھایا جا رہا ہے۔",
     tryAgain: "دوبارہ کوشش کریں",
 
-    preloadingHint: "پس منظر میں کوئز تیار ہو رہا ہے…",
+    choosePrompt: "آپ کیا بنانا چاہتے ہیں؟",
+    generateWithAI: "AI سے کوئز بنائیں",
+    useBackupQuiz: "بیک اپ کوئز استعمال کریں",
   },
 
   বাংলা: {
@@ -288,7 +301,7 @@ const L10N: Record<
     doneTitle: "চ্যালেঞ্জ শেষ!",
     doneScore: (s, t) => `আপনার স্কোর ${s} / ${t}`,
     playAgain: "আবার খেলুন",
-    generateQuiz: "নতুন কুইজ তৈরি করো",
+    generateQuiz: "কি তৈরি হবে বেছে নিন",
     changeUnit: "অন্য ইউনিট বেছে নাও",
     practiceBtn: "ভুল প্রশ্ন প্র্যাকটিস",
     noWrong: "দারুণ! কোনো ভুল নেই 🎉",
@@ -310,9 +323,9 @@ const L10N: Record<
     gotIt: "বুঝেছি!",
 
     lobbyTitle: "কুইজ অ্যাডভেঞ্চার",
-    lobbySub: "আগে একটি ইউনিট বেছে নাও, তারপর Start Challenge চাপো।",
+    lobbySub: "আগে একটি ইউনিট বেছে নাও, তারপর কীভাবে কুইজ তৈরি হবে বেছে নাও।",
     chooseUnit: "ইউনিট বেছে নাও",
-    startChallenge: "চ্যালেঞ্জ শুরু করো",
+    startChallenge: "কি তৈরি হবে বেছে নিন",
     gameReady: "গেম রেডি",
     unitLabel: "ইউনিট",
     challengeMode: "চ্যালেঞ্জ মোড",
@@ -321,10 +334,12 @@ const L10N: Record<
     selected: "নির্বাচিত",
 
     aiFailTitle: "AI কুইজ তৈরি করা যায়নি",
-    aiFailSub: "আবার চেষ্টা করো। Local AI model ready আছে কিনা দেখে নাও।",
+    aiFailSub: "ব্যাকআপ কুইজ দেখানো হচ্ছে।",
     tryAgain: "আবার চেষ্টা করো",
 
-    preloadingHint: "ব্যাকগ্রাউন্ডে কুইজ তৈরি হচ্ছে…",
+    choosePrompt: "আপনি কী তৈরি করতে চান?",
+    generateWithAI: "AI দিয়ে কুইজ তৈরি করুন",
+    useBackupQuiz: "ব্যাকআপ কুইজ ব্যবহার করুন",
   },
 
   हिन्दी: {
@@ -344,7 +359,7 @@ const L10N: Record<
     doneTitle: "Challenge Complete!",
     doneScore: (s, t) => `You scored ${s} / ${t}`,
     playAgain: "Play Again",
-    generateQuiz: "Generate Quiz",
+    generateQuiz: "क्या बनाना है चुनें",
     changeUnit: "Choose Another Unit",
     practiceBtn: "Practice Wrong Questions",
     noWrong: "Perfect! No wrong questions 🎉",
@@ -366,9 +381,9 @@ const L10N: Record<
     gotIt: "Got it!",
 
     lobbyTitle: "Quiz Adventure",
-    lobbySub: "Choose a unit first, then press Start Challenge.",
+    lobbySub: "Choose a unit first, then choose how to generate your quiz.",
     chooseUnit: "Choose Unit",
-    startChallenge: "Start Challenge",
+    startChallenge: "Choose What to Generate",
     gameReady: "Game Ready",
     unitLabel: "Unit",
     challengeMode: "Challenge Mode",
@@ -377,10 +392,12 @@ const L10N: Record<
     selected: "Selected",
 
     aiFailTitle: "AI quiz could not be generated",
-    aiFailSub: "Please try again. Make sure the local AI model is ready.",
+    aiFailSub: "Showing backup quiz instead.",
     tryAgain: "Try Again",
 
-    preloadingHint: "बैकग्राउंड में क्विज़ तैयार हो रहा है…",
+    choosePrompt: "आप क्या बनाना चाहते हैं?",
+    generateWithAI: "AI से Quiz बनाएं",
+    useBackupQuiz: "Backup Quiz इस्तेमाल करें",
   },
 };
 
@@ -587,6 +604,7 @@ export default function Quizzes() {
 
   const [mode, setMode] = useState<"quiz" | "practice">("quiz");
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [baseQuestions, setBaseQuestions] = useState<QuizQuestion[]>([]);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number, AnswerState>>({});
   const [done, setDone] = useState(false);
@@ -597,13 +615,8 @@ export default function Quizzes() {
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
-
-  /* ⚡ Background pre-generation state */
-  const [pregeneratedQuiz, setPregeneratedQuiz] = useState<QuizQuestion[] | null>(null);
-  const [isPreloading, setIsPreloading] = useState(false);
-  const preloadCancelRef = useRef(false);
-  const preloadUnitRef = useRef<string | null>(null);
-  const quizCacheRef = useRef<Record<string, QuizQuestion[]>>({});
+  const [hasGeneratedQuiz, setHasGeneratedQuiz] = useState(false);
+  const [generationChoiceOpen, setGenerationChoiceOpen] = useState(false);
 
   const units = useMemo(() => Array.from(new Set(LESSON_INFO.map((x) => x.unit))), []);
 
@@ -614,63 +627,6 @@ export default function Quizzes() {
       setLang(LANGS.includes(l) ? l : "English");
     })();
   }, []);
-
-  /* ⚡ Pre-generate quiz in background as soon as user selects a unit */
-  useEffect(() => {
-    if (!selectedUnit) {
-      setPregeneratedQuiz(null);
-      setIsPreloading(false);
-      return;
-    }
-
-    const cachedQuiz = quizCacheRef.current[selectedUnit];
-    if (cachedQuiz && cachedQuiz.length > 0) {
-      setPregeneratedQuiz(cachedQuiz);
-      setIsPreloading(false);
-      preloadUnitRef.current = selectedUnit;
-      return;
-    }
-
-    // Don't re-preload if we already have a quiz for this unit
-    if (preloadUnitRef.current === selectedUnit && pregeneratedQuiz !== null) {
-      return;
-    }
-
-    preloadCancelRef.current = true; // cancel any in-flight preload
-    setPregeneratedQuiz(null);
-    setIsPreloading(true);
-    setGenerationError(null);
-
-    const thisUnit = selectedUnit;
-    preloadCancelRef.current = false;
-    preloadUnitRef.current = thisUnit;
-
-    (async () => {
-      try {
-        const result = await tryGenerateQuestionsForUnit(thisUnit);
-        if (preloadCancelRef.current || preloadUnitRef.current !== thisUnit) return;
-
-        if (result.length > 0) {
-          quizCacheRef.current[thisUnit] = result;
-          setPregeneratedQuiz(result);
-        } else {
-          setPregeneratedQuiz(null);
-        }
-      } catch (err) {
-        console.error("Background preload error:", err);
-        if (preloadCancelRef.current || preloadUnitRef.current !== thisUnit) return;
-        setPregeneratedQuiz(null);
-      } finally {
-        if (preloadUnitRef.current === thisUnit) {
-          setIsPreloading(false);
-        }
-      }
-    })();
-
-    return () => {
-      preloadCancelRef.current = true;
-    };
-  }, [selectedUnit]);
 
   const total = questions.length;
   const q = questions[current];
@@ -698,8 +654,8 @@ export default function Quizzes() {
   const answeredCorrect = !!q && isAnswered && selected === q.correctAnswer;
 
   const wrongQuestions = useMemo(() => {
-    return questions.filter((qq) => wrongIds.includes(qq.id));
-  }, [questions, wrongIds]);
+    return baseQuestions.filter((qq) => wrongIds.includes(qq.id));
+  }, [baseQuestions, wrongIds]);
 
   const targetTopics = useMemo(() => {
     return Array.from(new Set(wrongQuestions.map((x) => x.topic))).slice(0, 3);
@@ -735,6 +691,22 @@ export default function Quizzes() {
   };
 
   const resetQuizState = () => {
+    setCurrent(0);
+    setAnswers({});
+    setWrongIds([]);
+    setDone(false);
+    setShowExplainSheet(false);
+  };
+
+  const resetSessionWithQuestions = (
+    sourceQuestions: QuizQuestion[],
+    sessionMode: "quiz" | "practice" = "quiz"
+  ) => {
+    setMode(sessionMode);
+    setQuestions(sourceQuestions);
+    if (sessionMode === "quiz") {
+      setBaseQuestions(sourceQuestions);
+    }
     setCurrent(0);
     setAnswers({});
     setWrongIds([]);
@@ -803,7 +775,10 @@ export default function Quizzes() {
         type: "Practice",
       }))
     );
-    resetQuizState();
+    setCurrent(0);
+    setAnswers({});
+    setDone(false);
+    setShowExplainSheet(false);
   };
 
   async function tryGenerateQuestionsForUnit(unit: string): Promise<QuizQuestion[]> {
@@ -822,8 +797,6 @@ export default function Quizzes() {
       );
 
       const sanitized = sanitizeGeneratedQuiz(generated, unit);
-
-      console.log("Sanitized quiz count:", sanitized.length);
 
       if (sanitized.length >= REQUIRED_QUESTION_COUNT) {
         return sanitized.slice(0, REQUIRED_QUESTION_COUNT);
@@ -854,53 +827,47 @@ export default function Quizzes() {
     return fallbackQuiz;
   }
 
-  /* ⚡ Start challenge — uses pregenerated quiz if available (near-instant) */
-  async function startChallengeForSelectedUnit() {
-    if (!selectedUnit) return;
+  async function generateQuizWithAI(unit: string) {
+    if (isGeneratingQuiz) return;
 
-    resetQuizState();
-    setQuestions([]);
+    setHasGeneratedQuiz(true);
+    setGenerationChoiceOpen(false);
     setGenerationError(null);
-
-    const cachedQuiz = selectedUnit ? quizCacheRef.current[selectedUnit] : null;
-
-    // ⚡ If background preload already finished, use it immediately
-    if ((cachedQuiz && cachedQuiz.length > 0) || (pregeneratedQuiz && pregeneratedQuiz.length > 0)) {
-      const readyQuiz = cachedQuiz && cachedQuiz.length > 0 ? cachedQuiz : pregeneratedQuiz!;
-      setMode("quiz");
-      setQuestions(readyQuiz);
-      setCurrent(0);
-      // Clear pregenerated so next "Generate Quiz" forces fresh generation
-      setPregeneratedQuiz(null);
-      preloadUnitRef.current = null;
-      return;
-    }
-
-    // Otherwise generate now (fallback if preload is still running or failed)
     setIsGeneratingQuiz(true);
+    setQuestions([]);
+    resetQuizState();
 
     try {
-      const finalQuestions = await tryGenerateQuestionsForUnit(selectedUnit);
+      const finalQuestions = await tryGenerateQuestionsForUnit(unit);
 
       if (finalQuestions.length === 0) {
-        setGenerationError("AI returned no valid quiz questions.");
-        setQuestions([]);
+        const fallbackQuiz = getFallbackQuizForUnit(unit);
+        setBaseQuestions(fallbackQuiz);
+        resetSessionWithQuestions(fallbackQuiz, "quiz");
+        setGenerationError(T.aiFailSub);
         return;
       }
 
-      if (selectedUnit && finalQuestions.length > 0) {
-        quizCacheRef.current[selectedUnit] = finalQuestions;
-      }
-      setMode("quiz");
-      setQuestions(finalQuestions);
-      setCurrent(0);
+      setBaseQuestions(finalQuestions);
+      resetSessionWithQuestions(finalQuestions, "quiz");
     } catch (err) {
-      console.error("Start challenge error:", err);
-      setGenerationError("Failed to generate quiz.");
-      setQuestions([]);
+      console.error("Generate quiz with AI error:", err);
+      const fallbackQuiz = getFallbackQuizForUnit(unit);
+      setBaseQuestions(fallbackQuiz);
+      resetSessionWithQuestions(fallbackQuiz, "quiz");
+      setGenerationError(T.aiFailSub);
     } finally {
       setIsGeneratingQuiz(false);
     }
+  }
+
+  function generateQuizFromBackup(unit: string) {
+    const fallbackQuiz = getFallbackQuizForUnit(unit);
+    setHasGeneratedQuiz(true);
+    setGenerationChoiceOpen(false);
+    setGenerationError(null);
+    setBaseQuestions(fallbackQuiz);
+    resetSessionWithQuestions(fallbackQuiz, "quiz");
   }
 
   const restartQuiz = async () => {
@@ -910,59 +877,24 @@ export default function Quizzes() {
       return;
     }
 
-    // Force fresh generation (clear any preloaded quiz)
-    if (selectedUnit) {
-      delete quizCacheRef.current[selectedUnit];
-    }
-    setPregeneratedQuiz(null);
-    preloadUnitRef.current = null;
-
-    setIsGeneratingQuiz(true);
-    resetQuizState();
-    setQuestions([]);
-    setGenerationError(null);
-
-    try {
-      const finalQuestions = await tryGenerateQuestionsForUnit(selectedUnit);
-
-      if (finalQuestions.length === 0) {
-        setGenerationError("AI returned no valid quiz questions.");
-        setQuestions([]);
-        return;
-      }
-
-      if (selectedUnit && finalQuestions.length > 0) {
-        quizCacheRef.current[selectedUnit] = finalQuestions;
-      }
-      setMode("quiz");
-      setQuestions(finalQuestions);
-      setCurrent(0);
-    } catch (err) {
-      console.error("Restart quiz error:", err);
-      setGenerationError("Failed to generate quiz.");
-      setQuestions([]);
-    } finally {
-      setIsGeneratingQuiz(false);
-    }
+    await generateQuizWithAI(selectedUnit);
   };
 
   const openUnitPickerFromResults = () => {
     resetQuizState();
     setQuestions([]);
+    setBaseQuestions([]);
     setDone(false);
     setGenerationError(null);
-    setPregeneratedQuiz(null);
-    preloadUnitRef.current = null;
+    setHasGeneratedQuiz(false);
+    setGenerationChoiceOpen(false);
     setShowUnitSelector(true);
   };
 
   const hasQuiz = questions.length > 0;
   const headerTagType = q?.type ?? (mode === "practice" ? T.practice : T.aiQuiz);
   const headerTagDiff = q?.difficulty ?? "Medium";
-
-  /* ⚡ Determine if the Start button should be enabled */
-  const canStartInstantly = !!(pregeneratedQuiz && pregeneratedQuiz.length > 0);
-  const canStartChallenge = !!selectedUnit && (!isGeneratingQuiz || canStartInstantly);
+  const canOpenGenerationChoice = !!selectedUnit && !isGeneratingQuiz;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -1071,38 +1003,47 @@ export default function Quizzes() {
                     </Pressable>
 
                     <Pressable
-                      onPress={startChallengeForSelectedUnit}
-                      disabled={!canStartChallenge}
+                      onPress={() => setGenerationChoiceOpen((prev) => !prev)}
+                      disabled={!canOpenGenerationChoice}
                       style={({ pressed }) => [
                         styles.lobbyStartBtn,
-                        canStartChallenge && styles.lobbyStartBtnReady,
-                        (!canStartChallenge || pressed) && {
-                          opacity: !canStartChallenge ? 0.55 : 0.92,
+                        (!canOpenGenerationChoice || pressed) && {
+                          opacity: !canOpenGenerationChoice ? 0.55 : 0.92,
                         },
                       ]}
                     >
-                      {isPreloading ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Ionicons name="play" size={18} color="#fff" />
-                      )}
+                      <Ionicons name="play" size={18} color="#fff" />
                       <Text style={styles.lobbyStartBtnText}>{T.startChallenge}</Text>
                     </Pressable>
                   </View>
 
-                  {/* ⚡ Background preloading hint */}
-                  {isPreloading && !generationError && (
-                    <View style={styles.preloadHintCard}>
-                      <ActivityIndicator size="small" color="#5B35F2" />
-                      <Text style={styles.preloadHintText}>{T.preloadingHint}</Text>
-                    </View>
-                  )}
+                  {generationChoiceOpen && selectedUnit && (
+                    <View style={styles.choiceCard}>
+                      <Text style={styles.choiceTitle}>{T.choosePrompt}</Text>
 
-                  {/* ⚡ Ready indicator */}
-                  {!isPreloading && pregeneratedQuiz && pregeneratedQuiz.length > 0 && !generationError && (
-                    <View style={styles.readyHintCard}>
-                      <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
-                      <Text style={styles.readyHintText}>Quiz ready! Tap Start Challenge.</Text>
+                      <Pressable
+                        onPress={() => generateQuizWithAI(selectedUnit)}
+                        style={({ pressed }) => [
+                          styles.choiceBtn,
+                          styles.choiceBtnPrimary,
+                          pressed && { opacity: 0.92 },
+                        ]}
+                      >
+                        <Ionicons name="sparkles" size={18} color="#fff" />
+                        <Text style={styles.choiceBtnPrimaryText}>{T.generateWithAI}</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => generateQuizFromBackup(selectedUnit)}
+                        style={({ pressed }) => [
+                          styles.choiceBtn,
+                          styles.choiceBtnSecondary,
+                          pressed && { opacity: 0.92 },
+                        ]}
+                      >
+                        <Ionicons name="list-outline" size={18} color="#111827" />
+                        <Text style={styles.choiceBtnSecondaryText}>{T.useBackupQuiz}</Text>
+                      </Pressable>
                     </View>
                   )}
 
@@ -1111,12 +1052,10 @@ export default function Quizzes() {
                       <Ionicons name="alert-circle-outline" size={20} color="#DC2626" />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.errorTitle}>{T.aiFailTitle}</Text>
-                        <Text style={styles.errorSub}>
-                          {generationError || T.aiFailSub}
-                        </Text>
+                        <Text style={styles.errorSub}>{generationError}</Text>
                       </View>
                     </View>
-                  ) : !isPreloading && !(pregeneratedQuiz && pregeneratedQuiz.length > 0) ? (
+                  ) : (
                     <View style={styles.emptyHintCard}>
                       <Ionicons name="bulb-outline" size={18} color="#5B35F2" />
                       <View style={{ flex: 1 }}>
@@ -1124,7 +1063,7 @@ export default function Quizzes() {
                         <Text style={styles.emptyHintSub}>{T.emptySub}</Text>
                       </View>
                     </View>
-                  ) : null}
+                  )}
                 </View>
               ) : isGeneratingQuiz ? (
                 <View style={styles.thinkingCard}>
@@ -1435,7 +1374,7 @@ export default function Quizzes() {
                       style={({ pressed }) => [styles.doneReplayBtn, pressed && { opacity: 0.92 }]}
                     >
                       <Ionicons name="sparkles" size={18} color="#fff" />
-                      <Text style={styles.doneReplayText}>{T.generateQuiz}</Text>
+                      <Text style={styles.doneReplayText}>Generate with AI Again</Text>
                     </Pressable>
 
                     <Pressable
@@ -1533,7 +1472,9 @@ export default function Quizzes() {
                         onPress={() => {
                           setSelectedUnit(unit);
                           setGenerationError(null);
+                          setGenerationChoiceOpen(false);
                           setShowUnitSelector(false);
+                          setHasGeneratedQuiz(false);
                         }}
                         style={({ pressed }) => [
                           styles.lessonOption,
@@ -1792,45 +1733,50 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
-  lobbyStartBtnReady: {
-    backgroundColor: "#16A34A",
-    borderColor: "#16A34A",
-  },
   lobbyStartBtnText: {
     color: "#fff",
     fontWeight: "900",
   },
 
-  /* ⚡ New: preloading / ready hint styles */
-  preloadHintCard: {
+  choiceCard: {
     borderRadius: 18,
     padding: 14,
-    backgroundColor: "rgba(91,53,242,0.06)",
+    backgroundColor: "rgba(17,24,39,0.04)",
     borderWidth: 1,
-    borderColor: "rgba(91,53,242,0.12)",
-    flexDirection: "row",
-    alignItems: "center",
+    borderColor: "rgba(17,24,39,0.08)",
     gap: 10,
   },
-  preloadHintText: {
-    color: "rgba(17,24,39,0.72)",
-    fontWeight: "800",
-    fontSize: 13,
-  },
-  readyHintCard: {
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: "rgba(34,197,94,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.20)",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  readyHintText: {
-    color: "#16A34A",
+  choiceTitle: {
+    color: INK,
     fontWeight: "900",
-    fontSize: 13,
+    fontSize: 14,
+  },
+  choiceBtn: {
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  choiceBtnPrimary: {
+    backgroundColor: "#5B35F2",
+  },
+  choiceBtnSecondary: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "rgba(17,24,39,0.10)",
+  },
+  choiceBtnPrimaryText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 15,
+  },
+  choiceBtnSecondaryText: {
+    color: INK,
+    fontWeight: "900",
+    fontSize: 15,
   },
 
   emptyHintCard: {

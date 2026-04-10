@@ -25,6 +25,7 @@ import {
   subscribeAIStatus,
   type Message,
 } from "../../lib/ai.local";
+import type { ModelChoice } from "../../lib/LocalModel";
 import {
   loadJSON,
   saveJSON,
@@ -70,76 +71,195 @@ const L10N: Record<
 
     startTitle: string;
     startHint: string;
+
+    preparing: string;
+    downloading: string;
+    loading: string;
+    error: string;
+
+    stage1: string;
+    stage2: string;
+    stage3: string;
+
+    gateDownloadingTitle: string;
+    gateLoadingTitle: string;
+    gatePreparingTitle: string;
+    gateErrorTitle: string;
+
+    gateDownloadingSub: string;
+    gateLoadingSub: string;
+    gatePreparingSub: string;
+    retry: string;
   }
 > = {
   English: {
     title: "Offklass Buddy",
-    subtitle: "Let's learn together!",
+    subtitle: "Powered by Gemma 4",
     placeholder: "Ask me anything...",
     greeting:
       "Hi there! 👋 I'm your Offklass Buddy. Tell me your grade and what we're learning today!",
-    aiBusy: "Oops! I'm thinking too hard. Try again!",
-    fallback: "I couldn't find the answer. Let's try another way!",
+    aiBusy: "Oops! I got stuck while thinking. Please try again!",
+    fallback: "I couldn't find the best answer yet. Let's try another way!",
+
     tipLabel: "Ideas",
     tipTitle: "Learning Boosters",
     tipSub: "Tap to add to your message!",
     startTitle: "Ready to Start?",
     startHint: "Tell me your grade + topic. I’ll make it super easy!",
+
+    preparing: "Preparing Gemma 4…",
+    downloading: "Downloading Gemma 4…",
+    loading: "Loading Gemma 4…",
+    error: "Gemma 4 needs retry",
+
+    stage1: "Checking lesson knowledge... 📚",
+    stage2: "Thinking carefully... 🧠",
+    stage3: "Writing the best answer... ✍️",
+
+    gateDownloadingTitle: "Downloading Gemma 4… 🧠",
+    gateLoadingTitle: "Loading Gemma 4… 🔥",
+    gatePreparingTitle: "Getting Gemma 4 ready…",
+    gateErrorTitle: "Gemma 4 needs help 🛠️",
+
+    gateDownloadingSub: "This happens only once on this device.",
+    gateLoadingSub: "Almost ready! Preparing lessons and answers…",
+    gatePreparingSub: "Setting up your offline tutor…",
+    retry: "Retry",
   },
   नेपाली: {
     title: "Offklass साथी",
-    subtitle: "सँगै सिकौं!",
+    subtitle: "Gemma 4 द्वारा powered",
     placeholder: "केही सोध्नुहोस्...",
     greeting:
       "नमस्ते! म Offklass शिक्षक हुँ। आफ्नो कक्षा र आज के सिक्न चाहनुहुन्छ भन्नुहोस्।",
-    aiBusy: "एआई व्यस्त छ। फेरि प्रयास गर्नुहोस्!",
-    fallback: "म जवाफ सोच्न सकिनँ।",
+    aiBusy: "एआई सोच्दै गर्दा अड्कियो। फेरि प्रयास गर्नुहोस्!",
+    fallback: "म राम्रो जवाफ फेला पार्न सकिनँ। फेरि प्रयास गरौं!",
+
     tipLabel: "टिप",
     tipTitle: "छिटो टिप्स",
     tipSub: "टिप ट्याप गर्दा मेसेजमा टाँसिन्छ।",
     startTitle: "सिकाइ सुरु गर्नुहोस्",
     startHint: "आफ्नो कक्षा + विषय भन्नुहोस्।",
+
+    preparing: "Gemma 4 तयार गर्दै…",
+    downloading: "Gemma 4 डाउनलोड हुँदैछ…",
+    loading: "Gemma 4 लोड हुँदैछ…",
+    error: "Gemma 4 फेरि चलाउनुपर्छ",
+
+    stage1: "पाठको जानकारी जाँच्दै... 📚",
+    stage2: "धेरै ध्यान दिएर सोच्दै... 🧠",
+    stage3: "सबैभन्दा राम्रो उत्तर लेख्दै... ✍️",
+
+    gateDownloadingTitle: "Gemma 4 डाउनलोड हुँदैछ… 🧠",
+    gateLoadingTitle: "Gemma 4 लोड हुँदैछ… 🔥",
+    gatePreparingTitle: "Gemma 4 तयार हुँदैछ…",
+    gateErrorTitle: "Gemma 4 लाई सहायता चाहियो 🛠️",
+
+    gateDownloadingSub: "यो यस डिभाइसमा एक पटक मात्र हुन्छ।",
+    gateLoadingSub: "लगभग तयार! उत्तर तयार गर्दै…",
+    gatePreparingSub: "तपाईंको अफलाइन ट्यूटर तयार गर्दै…",
+    retry: "फेरि प्रयास गर्नुहोस्",
   },
   اردو: {
     title: "Offklass ساتھی",
-    subtitle: "آئیے مل کر سیکھتے ہیں!",
+    subtitle: "Gemma 4 کے ساتھ",
     placeholder: "کچھ پوچھیں...",
     greeting: "سلام! میں آپ کا Offklass ٹیچر ہوں۔ اپنی جماعت بتائیں۔",
-    aiBusy: "اے آئی مصروف ہے۔ دوبارہ کوشش کریں!",
-    fallback: "میں جواب نہیں سوچ سکا۔",
+    aiBusy: "اے آئی سوچتے ہوئے رک گیا۔ دوبارہ کوشش کریں!",
+    fallback: "میں بہترین جواب نہیں ڈھونڈ سکا۔ دوبارہ کوشش کریں!",
+
     tipLabel: "آئیڈیاز",
     tipTitle: "فوری ٹپس",
     tipSub: "ٹپ پر ٹیپ کریں—پیغام میں آ جائے گا۔",
     startTitle: "سیکھنا شروع کریں",
     startHint: "اپنی جماعت + ٹاپک بتائیں۔",
+
+    preparing: "Gemma 4 تیار ہو رہا ہے…",
+    downloading: "Gemma 4 ڈاؤن لوڈ ہو رہا ہے…",
+    loading: "Gemma 4 لوڈ ہو رہا ہے…",
+    error: "Gemma 4 کو دوبارہ چلانا ہوگا",
+
+    stage1: "سبق کی معلومات دیکھ رہا ہوں... 📚",
+    stage2: "غور سے سوچ رہا ہوں... 🧠",
+    stage3: "بہترین جواب لکھ رہا ہوں... ✍️",
+
+    gateDownloadingTitle: "Gemma 4 ڈاؤن لوڈ ہو رہا ہے… 🧠",
+    gateLoadingTitle: "Gemma 4 لوڈ ہو رہا ہے… 🔥",
+    gatePreparingTitle: "Gemma 4 تیار ہو رہا ہے…",
+    gateErrorTitle: "Gemma 4 کو مدد چاہیے 🛠️",
+
+    gateDownloadingSub: "یہ اس ڈیوائس پر صرف ایک بار ہوگا۔",
+    gateLoadingSub: "تقریباً تیار! جواب تیار ہو رہے ہیں…",
+    gatePreparingSub: "آپ کا آف لائن ٹیوٹر تیار ہو رہا ہے…",
+    retry: "دوبارہ کوشش کریں",
   },
   বাংলা: {
     title: "Offklass বন্ধু",
-    subtitle: "চলো একসাথে শিখি!",
+    subtitle: "Gemma 4 চালিত",
     placeholder: "কিছু জিজ্ঞাসা করো...",
     greeting:
       "হাই! আমি আপনার Offklass শিক্ষক। আপনার ক্লাস ও আজ কী শিখতে চান বলুন।",
-    aiBusy: "এআই ব্যস্ত। আবার চেষ্টা করুন!",
-    fallback: "আমি উত্তর ভাবতে পারিনি।",
+    aiBusy: "এআই ভাবতে গিয়ে আটকে গেছে। আবার চেষ্টা করো!",
+    fallback: "আমি সেরা উত্তর খুঁজে পাইনি। আবার চেষ্টা করি!",
+
     tipLabel: "টিপস",
     tipTitle: "দ্রুত টিপস",
     tipSub: "টিপ ট্যাপ করলে মেসেজে বসে যাবে।",
     startTitle: "শেখা শুরু করুন",
     startHint: "আপনার ক্লাস + টপিক বলুন।",
+
+    preparing: "Gemma 4 প্রস্তুত হচ্ছে…",
+    downloading: "Gemma 4 ডাউনলোড হচ্ছে…",
+    loading: "Gemma 4 লোড হচ্ছে…",
+    error: "Gemma 4 আবার চালাতে হবে",
+
+    stage1: "পাঠের তথ্য দেখছি... 📚",
+    stage2: "ভালোভাবে ভাবছি... 🧠",
+    stage3: "সেরা উত্তর লিখছি... ✍️",
+
+    gateDownloadingTitle: "Gemma 4 ডাউনলোড হচ্ছে… 🧠",
+    gateLoadingTitle: "Gemma 4 লোড হচ্ছে… 🔥",
+    gatePreparingTitle: "Gemma 4 প্রস্তুত হচ্ছে…",
+    gateErrorTitle: "Gemma 4 সাহায্য চাইছে 🛠️",
+
+    gateDownloadingSub: "এই ডিভাইসে এটি একবারই হবে।",
+    gateLoadingSub: "প্রায় প্রস্তুত! উত্তর তৈরি হচ্ছে…",
+    gatePreparingSub: "তোমার অফলাইন টিউটর প্রস্তুত হচ্ছে…",
+    retry: "আবার চেষ্টা করো",
   },
   हिन्दी: {
     title: "Offklass Buddy",
-    subtitle: "चलो साथ पढ़ते हैं!",
+    subtitle: "Gemma 4 powered",
     placeholder: "कुछ भी पूछो...",
     greeting:
       "हाय! मैं आपका Offklass Buddy हूँ। अपनी कक्षा और आज क्या सीखना चाहते हैं बताइए।",
-    aiBusy: "AI busy है। फिर से try करें!",
-    fallback: "मैं answer नहीं सोच पाया।",
+    aiBusy: "AI सोचते समय अटक गया। फिर से try करो!",
+    fallback: "मुझे अभी best answer नहीं मिला। फिर से try करते हैं!",
+
     tipLabel: "Ideas",
     tipTitle: "Quick Tips",
     tipSub: "Tip पर tap करो—message में paste हो जाएगा।",
     startTitle: "Start learning",
     startHint: "Grade + topic बताओ।",
+
+    preparing: "Gemma 4 तैयार हो रहा है…",
+    downloading: "Gemma 4 डाउनलोड हो रहा है…",
+    loading: "Gemma 4 लोड हो रहा है…",
+    error: "Gemma 4 को फिर से चलाना होगा",
+
+    stage1: "Lesson knowledge देख रहा हूँ... 📚",
+    stage2: "ध्यान से सोच रहा हूँ... 🧠",
+    stage3: "सबसे अच्छा जवाब लिख रहा हूँ... ✍️",
+
+    gateDownloadingTitle: "Gemma 4 डाउनलोड हो रहा है… 🧠",
+    gateLoadingTitle: "Gemma 4 लोड हो रहा है… 🔥",
+    gatePreparingTitle: "Gemma 4 तैयार हो रहा है…",
+    gateErrorTitle: "Gemma 4 को मदद चाहिए 🛠️",
+
+    gateDownloadingSub: "यह इस device पर सिर्फ एक बार होगा।",
+    gateLoadingSub: "Almost ready! Answers तैयार हो रहे हैं…",
+    gatePreparingSub: "तुम्हारा offline tutor तैयार हो रहा है…",
+    retry: "Retry",
   },
 };
 
@@ -266,6 +386,14 @@ function getTips(_lang: Lang): TipItem[] {
   ];
 }
 
+function getStatusText(aiState: string, T: (typeof L10N)[Lang]) {
+  if (aiState === "ready") return T.subtitle;
+  if (aiState === "downloading") return T.downloading;
+  if (aiState === "loading") return T.loading;
+  if (aiState === "error") return T.error;
+  return T.preparing;
+}
+
 export default function OffklassAI() {
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useRef<Message[]>([]);
@@ -348,7 +476,7 @@ export default function OffklassAI() {
 
   useEffect(() => {
     const unsub = subscribeAIStatus(() => setAi(getAIStatus()));
-    prepareAI().catch(() => {});
+    prepareAI("gemma4e2b" as ModelChoice).catch(() => {});
     return () => {
       unsub();
     };
@@ -475,28 +603,35 @@ export default function OffklassAI() {
       {
         id: typingId,
         role: "assistant",
-        content: "Analyzing the question... 🤔",
+        content: T.stage1,
       },
     ]);
 
     setSending(true);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
 
-    const stageTimer = setTimeout(() => {
+    const stageTimer1 = setTimeout(() => {
       setMessages((m) =>
         m.map((msg) =>
-          msg.id === typingId
-            ? { ...msg, content: "Generating response... ✍️" }
-            : msg
+          msg.id === typingId ? { ...msg, content: T.stage2 } : msg
         )
       );
-    }, 1200);
+    }, 1000);
+
+    const stageTimer2 = setTimeout(() => {
+      setMessages((m) =>
+        m.map((msg) =>
+          msg.id === typingId ? { ...msg, content: T.stage3 } : msg
+        )
+      );
+    }, 2200);
 
     try {
-      const contextMessages = [...messagesRef.current.slice(-4), userMsg];
+      const contextMessages = [...messagesRef.current.slice(-6), userMsg];
       const reply = await callAI(contextMessages);
 
-      clearTimeout(stageTimer);
+      clearTimeout(stageTimer1);
+      clearTimeout(stageTimer2);
 
       const content =
         typeof reply?.content === "string" && reply.content.trim().length
@@ -505,7 +640,8 @@ export default function OffklassAI() {
 
       replaceTypingBubbleWith(content, typingId);
     } catch {
-      clearTimeout(stageTimer);
+      clearTimeout(stageTimer1);
+      clearTimeout(stageTimer2);
       replaceTypingBubbleWith(T.aiBusy, typingId);
     } finally {
       setSending(false);
@@ -543,19 +679,18 @@ export default function OffklassAI() {
                   <View
                     style={[
                       styles.statusDot,
-                      { backgroundColor: isReady ? UI.green : UI.yellow },
+                      {
+                        backgroundColor:
+                          ai.aiState === "error"
+                            ? UI.red
+                            : isReady
+                            ? UI.green
+                            : UI.yellow,
+                      },
                     ]}
                   />
                   <Text style={[styles.subtitle, rtl]}>
-                    {isReady
-                      ? T.subtitle
-                      : ai.aiState === "downloading"
-                      ? "Downloading AI…"
-                      : ai.aiState === "loading"
-                      ? "Loading AI…"
-                      : ai.aiState === "error"
-                      ? "AI needs retry"
-                      : "Preparing…"}
+                    {getStatusText(ai.aiState, T)}
                   </Text>
                 </View>
               </View>
@@ -613,7 +748,7 @@ export default function OffklassAI() {
               <TextInput
                 ref={inputRef}
                 style={[styles.input, rtl]}
-                placeholder={isReady ? T.placeholder : "AI is getting ready…"}
+                placeholder={isReady ? T.placeholder : T.preparing}
                 placeholderTextColor={UI.muted}
                 value={input}
                 onChangeText={setInput}
@@ -695,29 +830,34 @@ export default function OffklassAI() {
             <View style={styles.aiGate} pointerEvents="auto">
               <View style={styles.aiGateCard}>
                 <Ionicons name="sparkles" size={26} color={UI.purple} />
+
                 <Text style={styles.aiGateTitle}>
                   {ai.aiState === "downloading"
-                    ? "Downloading your AI Buddy… 🧠"
+                    ? T.gateDownloadingTitle
                     : ai.aiState === "loading"
-                    ? "Warming up… 🔥"
+                    ? T.gateLoadingTitle
                     : ai.aiState === "error"
-                    ? "AI needs help 🛠️"
-                    : "Getting ready…"}
+                    ? T.gateErrorTitle
+                    : T.gatePreparingTitle}
                 </Text>
 
                 {ai.aiState === "downloading" && (
                   <Text style={styles.aiGateSub}>
                     {ai.aiProgress
-                      ? `${ai.aiProgress.percent.toFixed(1)}%`
-                      : "Starting download…"}
+                      ? `${ai.aiProgress.percent.toFixed(1)}% • ${T.gateDownloadingSub}`
+                      : T.gateDownloadingSub}
                   </Text>
                 )}
 
                 {ai.aiState === "loading" && (
-                  <Text style={styles.aiGateSub}>
-                    Almost ready! Please wait…
-                  </Text>
+                  <Text style={styles.aiGateSub}>{T.gateLoadingSub}</Text>
                 )}
+
+                {ai.aiState !== "downloading" &&
+                  ai.aiState !== "loading" &&
+                  ai.aiState !== "error" && (
+                    <Text style={styles.aiGateSub}>{T.gatePreparingSub}</Text>
+                  )}
 
                 {ai.aiState === "error" && (
                   <>
@@ -729,7 +869,7 @@ export default function OffklassAI() {
                       style={styles.retryBtn}
                     >
                       <Ionicons name="refresh" size={18} color="#fff" />
-                      <Text style={styles.retryText}>Retry</Text>
+                      <Text style={styles.retryText}>{T.retry}</Text>
                     </Pressable>
                   </>
                 )}
