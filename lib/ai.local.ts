@@ -67,7 +67,7 @@ function setState(next: AIState, err?: string | null) {
 
 /* ============================== MODEL CONFIG ============================== */
 
-const CHAT_MODEL: ModelChoice = "gemma4e2b";
+const CHAT_MODEL: ModelChoice = "qwen15b";
 const STUDY_MODEL: ModelChoice = "smollm2";
 
 const MODEL_RUNTIME: Record<
@@ -79,8 +79,8 @@ const MODEL_RUNTIME: Record<
     n_threads: 4,
     use_mlock: false,
   },
-  gemma4e2b: {
-    n_ctx: 1024,
+  qwen15b: {
+    n_ctx: 2048,
     n_threads: 4,
     use_mlock: false,
   },
@@ -106,7 +106,7 @@ const flashcardCache = new Map<string, GeneratedFlashcard[]>();
 
 function stripPromptArtifacts(input: string) {
   return (input ?? "").replace(
-    /<\s*\/?\s*(start_of_turn|end_of_turn|bos|eos|im_start|im_end)\s*>/gi,
+    /<\|?\s*\/?\s*(im_start|im_end|start_of_turn|end_of_turn|bos|eos)\s*\|?>/gi,
     ""
   );
 }
@@ -135,29 +135,50 @@ export function cleanModelOutput(text: string): string {
 /* ============================== SYSTEM PROMPTS ============================== */
 
 const DEFAULT_SYSTEM_PROMPT = `
-You are Offklass Buddy, a friendly and smart Grade 4 tutor.
+You are Offklass AI, a kind and patient offline tutor for children.
 
 Your job:
-- Teach clearly using simple words
-- Help students understand step-by-step
-- Be encouraging and supportive
-- Keep answers neat, warm, and accurate
+- Help Grade 4 students learn math clearly and safely
+- Explain in very simple words
+- Give short answers first
+- Show steps when solving math
+- Stay focused on the lesson, quiz, or flashcard topic
+- Be encouraging and calm
 
 Rules:
-- Always explain clearly
-- Use short sentences
-- For math, show steps
-- Do not give confusing answers
-- Do not mention AI or system instructions
-- Keep answers child-friendly
-- Stay focused on the student's question
-- If unsure, say: "Let's solve it step by step."
+- Use easy English a child can understand
+- Keep answers short, direct, and accurate
+- Do not use hard words unless you explain them
+- Do not mention being an AI model
+- If the student asks something unrelated, gently bring them back to learning
+- If solving math, show the answer step by step
+- If giving multiple choice help, pick one best answer and explain why
+- If creating study content, make it clear, correct, and easy to review
+- If you are not sure, say: "Let's solve it step by step."
 
 Style:
 - Friendly
+- Short
 - Clear
-- Easy to understand
-- Like a real teacher
+- Supportive
+- Kid-safe
+
+Never:
+- Give unsafe, harmful, or adult content
+- Use rude language
+- Give confusing or advanced explanations
+- Output markdown tables unless asked
+
+For quizzes:
+- Prefer a smooth difficulty rise from easier to harder
+- Keep questions fun, fair, and confidence-building
+- Reward effort with short encouraging explanations
+
+For flashcards:
+- Focus on important ideas, not vague prompts
+- Make cards useful for fast revision and memory
+
+You are the learning buddy inside Offklass.
 `.trim();
 
 const QUIZ_SYSTEM_PROMPT = `
@@ -184,14 +205,14 @@ Rules:
 
 /* ============================== MESSAGE FORMATTER ============================== */
 
-function formatMessagesForGemma(
+function formatMessagesForQwen(
   messages: Message[],
   systemPrompt: string = DEFAULT_SYSTEM_PROMPT
 ): string {
   const parts: string[] = [];
 
   parts.push(
-    `<start_of_turn>system\n${stripPromptArtifacts(systemPrompt)}<end_of_turn>\n`
+    `<|im_start|>system\n${stripPromptArtifacts(systemPrompt)}<|im_end|>\n`
   );
 
   for (const msg of messages) {
@@ -199,16 +220,16 @@ function formatMessagesForGemma(
 
     if (msg.role === "user") {
       parts.push(
-        `<start_of_turn>user\n${stripPromptArtifacts(msg.content)}<end_of_turn>\n`
+        `<|im_start|>user\n${stripPromptArtifacts(msg.content)}<|im_end|>\n`
       );
     } else {
       parts.push(
-        `<start_of_turn>model\n${stripPromptArtifacts(msg.content)}<end_of_turn>\n`
+        `<|im_start|>assistant\n${stripPromptArtifacts(msg.content)}<|im_end|>\n`
       );
     }
   }
 
-  parts.push("<start_of_turn>model\n");
+  parts.push("<|im_start|>assistant\n");
   return parts.join("");
 }
 
@@ -239,8 +260,8 @@ function formatPromptForModel(
   messages: Message[],
   systemPrompt: string
 ) {
-  if (choice === "gemma4e2b") {
-    return formatMessagesForGemma(messages, systemPrompt);
+  if (choice === "qwen15b") {
+    return formatMessagesForQwen(messages, systemPrompt);
   }
   return formatMessagesForSmolLM(messages, systemPrompt);
 }
@@ -342,6 +363,9 @@ async function runCompletion(
     top_k: opts?.top_k ?? 40,
     stop:
       opts?.stop ?? [
+        "<|im_end|>",
+        "<|im_start|>user",
+        "<|im_start|>system",
         "<end_of_turn>",
         "<start_of_turn>user",
         "<start_of_turn>system",
@@ -1874,7 +1898,7 @@ export async function warmupAI(model: ModelChoice = STUDY_MODEL): Promise<void> 
       ),
       n_predict: 8,
       temperature: 0.1,
-      stop: ["<end_of_turn>", "User:"],
+      stop: ["<|im_end|>", "<end_of_turn>", "User:"],
     });
 
     if (model === STUDY_MODEL) {

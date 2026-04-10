@@ -94,7 +94,7 @@ const L10N: Record<
 > = {
   English: {
     title: "Offklass Buddy",
-    subtitle: "Powered by Gemma 4",
+    subtitle: "Powered by Qwen2.5",
     placeholder: "Ask me anything...",
     greeting:
       "Hi there! 👋 I'm your Offklass Buddy. Tell me your grade and what we're learning today!",
@@ -107,19 +107,19 @@ const L10N: Record<
     startTitle: "Ready to Start?",
     startHint: "Tell me your grade + topic. I’ll make it super easy!",
 
-    preparing: "Preparing Gemma 4…",
-    downloading: "Downloading Gemma 4…",
-    loading: "Loading Gemma 4…",
-    error: "Gemma 4 needs retry",
+    preparing: "Preparing Qwen2.5…",
+    downloading: "Downloading Qwen2.5…",
+    loading: "Loading Qwen2.5…",
+    error: "Qwen2.5 needs retry",
 
     stage1: "Checking lesson knowledge... 📚",
     stage2: "Thinking carefully... 🧠",
     stage3: "Writing the best answer... ✍️",
 
-    gateDownloadingTitle: "Downloading Gemma 4… 🧠",
-    gateLoadingTitle: "Loading Gemma 4… 🔥",
-    gatePreparingTitle: "Getting Gemma 4 ready…",
-    gateErrorTitle: "Gemma 4 needs help 🛠️",
+    gateDownloadingTitle: "Downloading Qwen2.5… 🧠",
+    gateLoadingTitle: "Loading Qwen2.5… 🔥",
+    gatePreparingTitle: "Getting Qwen2.5 ready…",
+    gateErrorTitle: "Qwen2.5 needs help 🛠️",
 
     gateDownloadingSub: "This happens only once on this device.",
     gateLoadingSub: "Almost ready! Preparing lessons and answers…",
@@ -128,7 +128,7 @@ const L10N: Record<
   },
   नेपाली: {
     title: "Offklass साथी",
-    subtitle: "Gemma 4 द्वारा powered",
+    subtitle: "Qwen2.5 द्वारा powered",
     placeholder: "केही सोध्नुहोस्...",
     greeting:
       "नमस्ते! म Offklass शिक्षक हुँ। आफ्नो कक्षा र आज के सिक्न चाहनुहुन्छ भन्नुहोस्।",
@@ -141,19 +141,19 @@ const L10N: Record<
     startTitle: "सिकाइ सुरु गर्नुहोस्",
     startHint: "आफ्नो कक्षा + विषय भन्नुहोस्।",
 
-    preparing: "Gemma 4 तयार गर्दै…",
-    downloading: "Gemma 4 डाउनलोड हुँदैछ…",
-    loading: "Gemma 4 लोड हुँदैछ…",
-    error: "Gemma 4 फेरि चलाउनुपर्छ",
+    preparing: "Qwen2.5 तयार गर्दै…",
+    downloading: "Qwen2.5 डाउनलोड हुँदैछ…",
+    loading: "Qwen2.5 लोड हुँदैछ…",
+    error: "Qwen2.5 फेरि चलाउनुपर्छ",
 
     stage1: "पाठको जानकारी जाँच्दै... 📚",
     stage2: "धेरै ध्यान दिएर सोच्दै... 🧠",
     stage3: "सबैभन्दा राम्रो उत्तर लेख्दै... ✍️",
 
-    gateDownloadingTitle: "Gemma 4 डाउनलोड हुँदैछ… 🧠",
-    gateLoadingTitle: "Gemma 4 लोड हुँदैछ… 🔥",
-    gatePreparingTitle: "Gemma 4 तयार हुँदैछ…",
-    gateErrorTitle: "Gemma 4 लाई सहायता चाहियो 🛠️",
+    gateDownloadingTitle: "Qwen2.5 डाउनलोड हुँदैछ… 🧠",
+    gateLoadingTitle: "Qwen2.5 लोड हुँदैछ… 🔥",
+    gatePreparingTitle: "Qwen2.5 तयार हुँदैछ…",
+    gateErrorTitle: "Qwen2.5 लाई सहायता चाहियो 🛠️",
 
     gateDownloadingSub: "यो यस डिभाइसमा एक पटक मात्र हुन्छ।",
     gateLoadingSub: "लगभग तयार! उत्तर तयार गर्दै…",
@@ -162,7 +162,7 @@ const L10N: Record<
   },
   اردو: {
     title: "Offklass ساتھی",
-    subtitle: "Gemma 4 کے ساتھ",
+    subtitle: "Qwen2.5 کے ساتھ",
     placeholder: "کچھ پوچھیں...",
     greeting: "سلام! میں آپ کا Offklass ٹیچر ہوں۔ اپنی جماعت بتائیں۔",
     aiBusy: "اے آئی سوچتے ہوئے رک گیا۔ دوبارہ کوشش کریں!",
@@ -174,19 +174,19 @@ const L10N: Record<
     startTitle: "سیکھنا شروع کریں",
     startHint: "اپنی جماعت + ٹاپک بتائیں۔",
 
-    preparing: "Gemma 4 تیار ہو رہا ہے…",
-    downloading: "Gemma 4 ڈاؤن لوڈ ہو رہا ہے…",
-    loading: "Gemma 4 لوڈ ہو رہا ہے…",
-    error: "Gemma 4 کو دوبارہ چلانا ہوگا",
+    preparing: "Qwen2.5 تیار ہو رہا ہے…",
+    downloading: "Qwen2.5 ڈاؤن لوڈ ہو رہا ہے…",
+    loading: "Qwen2.5 لوڈ ہو رہا ہے…",
+    error: "Qwen2.5 کو دوبارہ چلانا ہوگا",
 
     stage1: "سبق کی معلومات دیکھ رہا ہوں... 📚",
     stage2: "غور سے سوچ رہا ہوں... 🧠",
     stage3: "بہترین جواب لکھ رہا ہوں... ✍️",
 
-    gateDownloadingTitle: "Gemma 4 ڈاؤن لوڈ ہو رہا ہے… 🧠",
-    gateLoadingTitle: "Gemma 4 لوڈ ہو رہا ہے… 🔥",
-    gatePreparingTitle: "Gemma 4 تیار ہو رہا ہے…",
-    gateErrorTitle: "Gemma 4 کو مدد چاہیے 🛠️",
+    gateDownloadingTitle: "Qwen2.5 ڈاؤن لوڈ ہو رہا ہے… 🧠",
+    gateLoadingTitle: "Qwen2.5 لوڈ ہو رہا ہے… 🔥",
+    gatePreparingTitle: "Qwen2.5 تیار ہو رہا ہے…",
+    gateErrorTitle: "Qwen2.5 کو مدد چاہیے 🛠️",
 
     gateDownloadingSub: "یہ اس ڈیوائس پر صرف ایک بار ہوگا۔",
     gateLoadingSub: "تقریباً تیار! جواب تیار ہو رہے ہیں…",
@@ -195,7 +195,7 @@ const L10N: Record<
   },
   বাংলা: {
     title: "Offklass বন্ধু",
-    subtitle: "Gemma 4 চালিত",
+    subtitle: "Qwen2.5 চালিত",
     placeholder: "কিছু জিজ্ঞাসা করো...",
     greeting:
       "হাই! আমি আপনার Offklass শিক্ষক। আপনার ক্লাস ও আজ কী শিখতে চান বলুন।",
@@ -208,19 +208,19 @@ const L10N: Record<
     startTitle: "শেখা শুরু করুন",
     startHint: "আপনার ক্লাস + টপিক বলুন।",
 
-    preparing: "Gemma 4 প্রস্তুত হচ্ছে…",
-    downloading: "Gemma 4 ডাউনলোড হচ্ছে…",
-    loading: "Gemma 4 লোড হচ্ছে…",
-    error: "Gemma 4 আবার চালাতে হবে",
+    preparing: "Qwen2.5 প্রস্তুত হচ্ছে…",
+    downloading: "Qwen2.5 ডাউনলোড হচ্ছে…",
+    loading: "Qwen2.5 লোড হচ্ছে…",
+    error: "Qwen2.5 আবার চালাতে হবে",
 
     stage1: "পাঠের তথ্য দেখছি... 📚",
     stage2: "ভালোভাবে ভাবছি... 🧠",
     stage3: "সেরা উত্তর লিখছি... ✍️",
 
-    gateDownloadingTitle: "Gemma 4 ডাউনলোড হচ্ছে… 🧠",
-    gateLoadingTitle: "Gemma 4 লোড হচ্ছে… 🔥",
-    gatePreparingTitle: "Gemma 4 প্রস্তুত হচ্ছে…",
-    gateErrorTitle: "Gemma 4 সাহায্য চাইছে 🛠️",
+    gateDownloadingTitle: "Qwen2.5 ডাউনলোড হচ্ছে… 🧠",
+    gateLoadingTitle: "Qwen2.5 লোড হচ্ছে… 🔥",
+    gatePreparingTitle: "Qwen2.5 প্রস্তুত হচ্ছে…",
+    gateErrorTitle: "Qwen2.5 সাহায্য চাইছে 🛠️",
 
     gateDownloadingSub: "এই ডিভাইসে এটি একবারই হবে।",
     gateLoadingSub: "প্রায় প্রস্তুত! উত্তর তৈরি হচ্ছে…",
@@ -229,7 +229,7 @@ const L10N: Record<
   },
   हिन्दी: {
     title: "Offklass Buddy",
-    subtitle: "Gemma 4 powered",
+    subtitle: "Qwen2.5 powered",
     placeholder: "कुछ भी पूछो...",
     greeting:
       "हाय! मैं आपका Offklass Buddy हूँ। अपनी कक्षा और आज क्या सीखना चाहते हैं बताइए।",
@@ -242,19 +242,19 @@ const L10N: Record<
     startTitle: "Start learning",
     startHint: "Grade + topic बताओ।",
 
-    preparing: "Gemma 4 तैयार हो रहा है…",
-    downloading: "Gemma 4 डाउनलोड हो रहा है…",
-    loading: "Gemma 4 लोड हो रहा है…",
-    error: "Gemma 4 को फिर से चलाना होगा",
+    preparing: "Qwen2.5 तैयार हो रहा है…",
+    downloading: "Qwen2.5 डाउनलोड हो रहा है…",
+    loading: "Qwen2.5 लोड हो रहा है…",
+    error: "Qwen2.5 को फिर से चलाना होगा",
 
     stage1: "Lesson knowledge देख रहा हूँ... 📚",
     stage2: "ध्यान से सोच रहा हूँ... 🧠",
     stage3: "सबसे अच्छा जवाब लिख रहा हूँ... ✍️",
 
-    gateDownloadingTitle: "Gemma 4 डाउनलोड हो रहा है… 🧠",
-    gateLoadingTitle: "Gemma 4 लोड हो रहा है… 🔥",
-    gatePreparingTitle: "Gemma 4 तैयार हो रहा है…",
-    gateErrorTitle: "Gemma 4 को मदद चाहिए 🛠️",
+    gateDownloadingTitle: "Qwen2.5 डाउनलोड हो रहा है… 🧠",
+    gateLoadingTitle: "Qwen2.5 लोड हो रहा है… 🔥",
+    gatePreparingTitle: "Qwen2.5 तैयार हो रहा है…",
+    gateErrorTitle: "Qwen2.5 को मदद चाहिए 🛠️",
 
     gateDownloadingSub: "यह इस device पर सिर्फ एक बार होगा।",
     gateLoadingSub: "Almost ready! Answers तैयार हो रहे हैं…",
@@ -476,7 +476,7 @@ export default function OffklassAI() {
 
   useEffect(() => {
     const unsub = subscribeAIStatus(() => setAi(getAIStatus()));
-    prepareAI("gemma4e2b" as ModelChoice).catch(() => {});
+    prepareAI("qwen2.5" as ModelChoice).catch(() => {});
     return () => {
       unsub();
     };

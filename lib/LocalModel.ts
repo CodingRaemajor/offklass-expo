@@ -1,6 +1,6 @@
 import * as FileSystem from "expo-file-system";
 
-export type ModelChoice = "smollm2" | "gemma4e2b";
+export type ModelChoice = "smollm2" | "qwen15b";
 
 type ModelSpec = {
   filename: string;
@@ -17,12 +17,12 @@ const MODEL_SPECS: Record<ModelChoice, ModelSpec> = {
     expectedMinSize: 900_000_000,
     expectedMaxSize: 1_400_000_000,
   },
-  gemma4e2b: {
-    filename: "google_gemma-4-E2B-it-IQ2_M.gguf",
+  qwen15b: {
+    filename: "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
     url:
-      "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-IQ2_M.gguf",
-    expectedMinSize: 2_300_000_000,
-    expectedMaxSize: 2_900_000_000,
+      "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
+    expectedMinSize: 900_000_000,
+    expectedMaxSize: 1_400_000_000,
   },
 };
 
@@ -106,15 +106,12 @@ async function ensureDownloaded(
   const finalInfo = await FileSystem.getInfoAsync(dest);
   const finalSize = finalInfo.exists ? (finalInfo.size ?? 0) : 0;
 
-  if (
-    finalSize < spec.expectedMinSize ||
-    finalSize > spec.expectedMaxSize
-  ) {
+  if (finalSize < spec.expectedMinSize || finalSize > spec.expectedMaxSize) {
     await cleanupFile(dest);
     throw new Error(
-      `Downloaded ${choice} file size looks wrong: ${(finalSize / 1_000_000_000).toFixed(
-        2
-      )} GB`
+      `Downloaded ${choice} file size looks wrong: ${(
+        finalSize / 1_000_000_000
+      ).toFixed(2)} GB`
     );
   }
 
@@ -185,8 +182,5 @@ export async function getAllModelInfo(): Promise<
     downloadUrl: string;
   }>
 > {
-  return Promise.all([
-    getModelInfo("smollm2"),
-    getModelInfo("gemma4e2b"),
-  ]);
+  return Promise.all([getModelInfo("smollm2"), getModelInfo("qwen15b")]);
 }
