@@ -25,7 +25,6 @@ import {
   subscribeAIStatus,
   type Message,
 } from "../../lib/ai.local";
-import type { ModelChoice } from "../../lib/LocalModel";
 import {
   loadJSON,
   saveJSON,
@@ -54,6 +53,8 @@ const UI = {
 
 const LANGS = ["English", "नेपाली", "اردو", "বাংলা", "हिन्दी"] as const;
 type Lang = (typeof LANGS)[number];
+
+const AI_CHAT_MODEL = "qwen15b";
 
 const L10N: Record<
   Lang,
@@ -471,12 +472,11 @@ export default function OffklassAI() {
     setTimeout(() => inputRef.current?.focus(), 120);
   }
 
-  // ✅ AI STATUS GATE (download -> load -> ready)
   const [ai, setAi] = useState(getAIStatus());
 
   useEffect(() => {
     const unsub = subscribeAIStatus(() => setAi(getAIStatus()));
-    prepareAI("qwen2.5" as ModelChoice).catch(() => {});
+    prepareAI(AI_CHAT_MODEL).catch(() => {});
     return () => {
       unsub();
     };
@@ -484,7 +484,6 @@ export default function OffklassAI() {
 
   const isReady = ai.aiState === "ready";
 
-  // ✅ KEYBOARD FIX
   const keyboardBehavior = Platform.OS === "ios" ? "padding" : "height";
   const keyboardOffset = Platform.OS === "ios" ? 0 : Math.max(0, insets.top);
 
@@ -662,7 +661,6 @@ export default function OffklassAI() {
           behavior={keyboardBehavior as any}
           keyboardVerticalOffset={keyboardOffset}
         >
-          {/* Header */}
           <View style={styles.headerWrap}>
             <View style={styles.headerCard}>
               <Pressable
@@ -701,7 +699,6 @@ export default function OffklassAI() {
             </View>
           </View>
 
-          {/* Chat */}
           <FlatList
             ref={listRef}
             data={messages}
@@ -734,7 +731,6 @@ export default function OffklassAI() {
             }
           />
 
-          {/* Composer */}
           <View
             style={[
               styles.composerOuter,
@@ -782,7 +778,6 @@ export default function OffklassAI() {
             </View>
           </View>
 
-          {/* Tips Modal */}
           <Modal
             visible={tipOpen}
             transparent
@@ -825,7 +820,6 @@ export default function OffklassAI() {
             </Pressable>
           </Modal>
 
-          {/* ✅ AI Gate Overlay (download/load/error) */}
           {!isReady && (
             <View style={styles.aiGate} pointerEvents="auto">
               <View style={styles.aiGateCard}>
@@ -865,7 +859,7 @@ export default function OffklassAI() {
                       {ai.aiError ?? "Something went wrong."}
                     </Text>
                     <Pressable
-                      onPress={() => prepareAI().catch(() => {})}
+                      onPress={() => prepareAI(AI_CHAT_MODEL).catch(() => {})}
                       style={styles.retryBtn}
                     >
                       <Ionicons name="refresh" size={18} color="#fff" />

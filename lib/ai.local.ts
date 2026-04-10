@@ -39,6 +39,7 @@ type AIState = "idle" | "downloading" | "loading" | "ready" | "error";
 let ctx: LlamaContext | null = null;
 let loadedModel: ModelChoice | null = null;
 let inflight: Promise<Message> | null = null;
+let preparingPromise: Promise<void> | null = null;
 
 let aiState: AIState = "idle";
 let aiProgress: DownloadProgress | null = null;
@@ -70,6 +71,8 @@ function setState(next: AIState, err?: string | null) {
 const CHAT_MODEL: ModelChoice = "qwen15b";
 const STUDY_MODEL: ModelChoice = "smollm2";
 
+type AIModelInput = ModelChoice | "qwen2.5" | "qwen" | "qwen2.5-1.5b" | string;
+
 const MODEL_RUNTIME: Record<
   ModelChoice,
   { n_ctx: number; n_threads: number; use_mlock: boolean }
@@ -85,6 +88,19 @@ const MODEL_RUNTIME: Record<
     use_mlock: false,
   },
 };
+
+function normalizeModelChoice(choice: AIModelInput): ModelChoice {
+  const raw = String(choice ?? "").trim().toLowerCase();
+
+  if (raw === "smollm2") return "smollm2";
+  if (raw === "qwen15b") return "qwen15b";
+
+  if (raw === "qwen2.5" || raw === "qwen" || raw === "qwen2.5-1.5b") {
+    return "qwen15b";
+  }
+
+  return CHAT_MODEL;
+}
 
 const CHAT_N_PREDICT = 192;
 const QUIZ_N_PREDICT = 320;
@@ -295,7 +311,9 @@ async function releaseLoadedContext({
   }
 }
 
-async function getContext(choice: ModelChoice): Promise<LlamaContext> {
+async function getContext(choiceInput: AIModelInput): Promise<LlamaContext> {
+  const choice = normalizeModelChoice(choiceInput);
+
   if (Constants.appOwnership === "expo") {
     throw new Error("Local AI requires a Development Build.");
   }
@@ -307,9 +325,15 @@ async function getContext(choice: ModelChoice): Promise<LlamaContext> {
 
   const modelPath = await ensureModel(choice, (p) => {
     aiProgress = p;
-    if (aiState !== "downloading") aiState = "downloading";
+    if (aiState !== "downloading") {
+      aiState = "downloading";
+    }
     notify();
   });
+
+  if (!modelPath || typeof modelPath !== "string") {
+    throw new Error("Model path is missing.");
+  }
 
   if (ctx && loadedModel !== choice) {
     await releaseLoadedContext();
@@ -319,6 +343,9 @@ async function getContext(choice: ModelChoice): Promise<LlamaContext> {
   setState("loading");
 
   const runtime = MODEL_RUNTIME[choice];
+  if (!runtime) {
+    throw new Error(`No runtime config found for model: ${choice}`);
+  }
 
   ctx = await initLlama({
     model: modelPath,
@@ -333,13 +360,29 @@ async function getContext(choice: ModelChoice): Promise<LlamaContext> {
   return ctx;
 }
 
-export async function prepareAI(model: ModelChoice = CHAT_MODEL): Promise<void> {
-  try {
-    await getContext(model);
-  } catch (e: any) {
-    setState("error", String(e?.message ?? e));
-    throw e;
+export async function prepareAI(model: AIModelInput = CHAT_MODEL): Promise<void> {
+  const choice = normalizeModelChoice(model);
+
+  if (aiState === "ready" && loadedModel === choice && ctx) {
+    return;
   }
+
+  if (preparingPromise) {
+    return preparingPromise;
+  }
+
+  preparingPromise = (async () => {
+    try {
+      await getContext(choice);
+    } catch (e: any) {
+      setState("error", String(e?.message ?? e));
+      throw e;
+    } finally {
+      preparingPromise = null;
+    }
+  })();
+
+  return preparingPromise;
 }
 
 /* ============================== GENERIC COMPLETION ============================== */
@@ -1885,14 +1928,16 @@ export function getGeneratedStudyCacheInfo() {
 
 /* ============================== UTILS ============================== */
 
-export async function warmupAI(model: ModelChoice = STUDY_MODEL): Promise<void> {
+export async function warmupAI(model: AIModelInput = STUDY_MODEL): Promise<void> {
   try {
-    if (!(await isModelDownloaded(model))) return;
-    const engine = await getContext(model);
+    const choice = normalizeModelChoice(model);
+    if (!(await isModelDownloaded(choice))) return;
+
+    const engine = await getContext(choice);
 
     await engine.completion({
       prompt: formatPromptForModel(
-        model,
+        choice,
         [{ id: "warmup", role: "user", content: "Say ready." }],
         "You are ready."
       ),
@@ -1901,7 +1946,7 @@ export async function warmupAI(model: ModelChoice = STUDY_MODEL): Promise<void> 
       stop: ["<|im_end|>", "<end_of_turn>", "User:"],
     });
 
-    if (model === STUDY_MODEL) {
+    if (choice === STUDY_MODEL) {
       await releaseLoadedContext();
     }
   } catch {}
