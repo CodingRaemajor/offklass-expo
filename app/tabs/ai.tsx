@@ -1,3 +1,4 @@
+
 // app/(tabs)/ai.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -13,11 +14,11 @@ import {
   Animated,
   Easing,
   Modal,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import ChatBubble from "../../components/ChatBubble";
 import {
   callAI,
   prepareAI,
@@ -32,29 +33,39 @@ import {
   type OnboardingData,
 } from "../../lib/storage";
 
-/* --------------------------- Playful “Kid Teacher” UI --------------------------- */
+/* --------------------------- ChatGPT-ish playful UI --------------------------- */
 
 const UI = {
-  bg: "#F0F7FF",
-  bgAccent: "#E0E7FF",
-  card: "rgba(255,255,255,0.95)",
-  border: "rgba(0,0,0,0.05)",
-  text: "#1E293B",
+  bg: "#F5F8FF",
+  bgAccent: "#E6EEFF",
+  card: "rgba(255,255,255,0.96)",
+  cardStrong: "#FFFFFF",
+  border: "rgba(15,23,42,0.08)",
+  text: "#172033",
   subtext: "#64748B",
   muted: "#94A3B8",
-  purple: "#7C3AED",
-  blue: "#3B82F6",
-  yellow: "#F59E0B",
+  purple: "#6D28D9",
+  purpleSoft: "#F3E8FF",
+  blue: "#2563EB",
+  blueSoft: "#DBEAFE",
   green: "#10B981",
+  yellow: "#F59E0B",
   red: "#EF4444",
   inputBg: "#F8FAFC",
   inputBorder: "#E2E8F0",
+  assistantBubble: "#FFFFFF",
+  userBubble: "#6D28D9",
+  assistantText: "#172033",
+  userText: "#FFFFFF",
+  chip: "#EEF2FF",
 };
 
 const LANGS = ["English", "नेपाली", "اردو", "বাংলা", "हिन्दी"] as const;
 type Lang = (typeof LANGS)[number];
 
 const AI_CHAT_MODEL = "qwen15b";
+const STORE_KEY = "chat:offklass";
+const MAX_INPUT_HEIGHT = 170;
 
 const L10N: Record<
   Lang,
@@ -104,18 +115,18 @@ const L10N: Record<
 
     tipLabel: "Ideas",
     tipTitle: "Learning Boosters",
-    tipSub: "Tap to add to your message!",
+    tipSub: "Tap one to add it to your message.",
     startTitle: "Ready to Start?",
-    startHint: "Tell me your grade + topic. I’ll make it super easy!",
+    startHint: "Tell me your grade and topic. I’ll make it easy.",
 
     preparing: "Preparing Qwen2.5…",
     downloading: "Downloading Qwen2.5…",
     loading: "Loading Qwen2.5…",
     error: "Qwen2.5 needs retry",
 
-    stage1: "Checking lesson knowledge... 📚",
+    stage1: "Checking what you need... 📚",
     stage2: "Thinking carefully... 🧠",
-    stage3: "Writing the best answer... ✍️",
+    stage3: "Writing the answer... ✍️",
 
     gateDownloadingTitle: "Downloading Qwen2.5… 🧠",
     gateLoadingTitle: "Loading Qwen2.5… 🔥",
@@ -123,7 +134,7 @@ const L10N: Record<
     gateErrorTitle: "Qwen2.5 needs help 🛠️",
 
     gateDownloadingSub: "This happens only once on this device.",
-    gateLoadingSub: "Almost ready! Preparing lessons and answers…",
+    gateLoadingSub: "Almost ready! Preparing answers…",
     gatePreparingSub: "Setting up your offline tutor…",
     retry: "Retry",
   },
@@ -132,7 +143,7 @@ const L10N: Record<
     subtitle: "Qwen2.5 द्वारा powered",
     placeholder: "केही सोध्नुहोस्...",
     greeting:
-      "नमस्ते! म Offklass शिक्षक हुँ। आफ्नो कक्षा र आज के सिक्न चाहनुहुन्छ भन्नुहोस्।",
+      "नमस्ते! म Offklass साथी हुँ। आफ्नो कक्षा र आज के सिक्न चाहनुहुन्छ भन्नुहोस्।",
     aiBusy: "एआई सोच्दै गर्दा अड्कियो। फेरि प्रयास गर्नुहोस्!",
     fallback: "म राम्रो जवाफ फेला पार्न सकिनँ। फेरि प्रयास गरौं!",
 
@@ -165,7 +176,7 @@ const L10N: Record<
     title: "Offklass ساتھی",
     subtitle: "Qwen2.5 کے ساتھ",
     placeholder: "کچھ پوچھیں...",
-    greeting: "سلام! میں آپ کا Offklass ٹیچر ہوں۔ اپنی جماعت بتائیں۔",
+    greeting: "سلام! میں آپ کا Offklass ٹیچر ہوں۔ اپنی جماعت اور ٹاپک بتائیں۔",
     aiBusy: "اے آئی سوچتے ہوئے رک گیا۔ دوبارہ کوشش کریں!",
     fallback: "میں بہترین جواب نہیں ڈھونڈ سکا۔ دوبارہ کوشش کریں!",
 
@@ -199,7 +210,7 @@ const L10N: Record<
     subtitle: "Qwen2.5 চালিত",
     placeholder: "কিছু জিজ্ঞাসা করো...",
     greeting:
-      "হাই! আমি আপনার Offklass শিক্ষক। আপনার ক্লাস ও আজ কী শিখতে চান বলুন।",
+      "হাই! আমি তোমার Offklass বন্ধু। তোমার ক্লাস আর আজ কী শিখতে চাও বলো।",
     aiBusy: "এআই ভাবতে গিয়ে আটকে গেছে। আবার চেষ্টা করো!",
     fallback: "আমি সেরা উত্তর খুঁজে পাইনি। আবার চেষ্টা করি!",
 
@@ -207,7 +218,7 @@ const L10N: Record<
     tipTitle: "দ্রুত টিপস",
     tipSub: "টিপ ট্যাপ করলে মেসেজে বসে যাবে।",
     startTitle: "শেখা শুরু করুন",
-    startHint: "আপনার ক্লাস + টপিক বলুন।",
+    startHint: "তোমার ক্লাস + টপিক বলো।",
 
     preparing: "Qwen2.5 প্রস্তুত হচ্ছে…",
     downloading: "Qwen2.5 ডাউনলোড হচ্ছে…",
@@ -263,10 +274,6 @@ const L10N: Record<
     retry: "Retry",
   },
 };
-
-const STORE_KEY = "chat:offklass";
-
-/* -------------------------- Decorative Background -------------------------- */
 
 const KidBackground = () => (
   <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -328,7 +335,7 @@ class ErrorBoundary extends React.Component<
         <SafeAreaView style={{ flex: 1, backgroundColor: UI.bg }}>
           <View style={{ padding: 20 }}>
             <Text style={{ fontSize: 20, fontWeight: "900", color: UI.red }}>
-              Oopsie!
+              Oops!
             </Text>
             <Text style={{ color: UI.subtext, marginTop: 8 }}>
               {String(this.state.err?.message ?? this.state.err)}
@@ -341,8 +348,6 @@ class ErrorBoundary extends React.Component<
     return this.props.children;
   }
 }
-
-/* -------------------------- Tip content (kid friendly) -------------------------- */
 
 type TipItem = { key: string; title: string; text: string; icon: any };
 
@@ -395,11 +400,88 @@ function getStatusText(aiState: string, T: (typeof L10N)[Lang]) {
   return T.preparing;
 }
 
+function formatBubbleText(text: string) {
+  const lines = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
+  return lines.map((line, index) => {
+    const trimmed = line.trim();
+    const isBullet =
+      trimmed.startsWith("- ") ||
+      trimmed.startsWith("• ") ||
+      /^\d+[\.\)]\s/.test(trimmed);
+
+    return (
+      <Text
+        key={`${index}-${line.length}`}
+        style={[
+          styles.messageText,
+          isBullet && styles.messageTextBullet,
+          index < lines.length - 1 && styles.messageLineSpacing,
+        ]}
+      >
+        {line.length ? line : " "}
+      </Text>
+    );
+  });
+}
+
+function MessageBubble({
+  role,
+  text,
+  rtl,
+}: {
+  role: "user" | "assistant";
+  text: string;
+  rtl?: { writingDirection: "rtl"; textAlign: "right" } | undefined;
+}) {
+  const isUser = role === "user";
+
+  return (
+    <View
+      style={[
+        styles.messageRow,
+        isUser ? styles.messageRowUser : styles.messageRowAssistant,
+      ]}
+    >
+      {!isUser && (
+        <View style={styles.avatarAssistant}>
+          <Ionicons name="sparkles" size={16} color={UI.purple} />
+        </View>
+      )}
+
+      <View
+        style={[
+          styles.messageBubble,
+          isUser ? styles.userBubble : styles.assistantBubble,
+        ]}
+      >
+        {!isUser && (
+          <View style={styles.bubbleHeader}>
+            <Text style={styles.bubbleHeaderText}>Offklass Buddy</Text>
+          </View>
+        )}
+
+        <View style={styles.messageTextWrap}>
+          {React.Children.map(formatBubbleText(text), (child: any) =>
+            React.cloneElement(child, {
+              style: [
+                child.props.style,
+                rtl,
+                { color: isUser ? UI.userText : UI.assistantText },
+              ],
+            })
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function OffklassAI() {
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useRef<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [inputHeight, setInputHeight] = useState(48);
   const listRef = useRef<FlatList<Message>>(null);
   const inputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
@@ -422,57 +504,15 @@ export default function OffklassAI() {
     correctAnswer?: string;
   }>();
   const lastQuestionRef = useRef<string | undefined>(undefined);
+  const [composerH, setComposerH] = useState(96);
 
-  const [composerH, setComposerH] = useState(80);
-
-  /* ------------------------------ Tip popup state ------------------------------ */
   const [tipOpen, setTipOpen] = useState(false);
   const tipFade = useRef(new Animated.Value(0)).current;
-  const tipScale = useRef(new Animated.Value(0.9)).current;
-
+  const tipScale = useRef(new Animated.Value(0.94)).current;
   const tips = useMemo(() => getTips(lang), [lang]);
 
-  function openTips() {
-    setTipOpen(true);
-    tipFade.setValue(0);
-    tipScale.setValue(0.9);
-
-    Animated.parallel([
-      Animated.timing(tipFade, {
-        toValue: 1,
-        duration: 200,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.spring(tipScale, {
-        toValue: 1,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }
-
-  function closeTips() {
-    Animated.timing(tipFade, {
-      toValue: 0,
-      duration: 150,
-      useNativeDriver: true,
-    }).start(() => setTipOpen(false));
-  }
-
-  function applyTip(text: string) {
-    setInput((prev) => {
-      const base = prev.trim();
-      return base ? `${base}\n\n${text}` : text;
-    });
-
-    closeTips();
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
-    setTimeout(() => inputRef.current?.focus(), 120);
-  }
-
   const [ai, setAi] = useState(getAIStatus());
+  const isReady = ai.aiState === "ready";
 
   useEffect(() => {
     const unsub = subscribeAIStatus(() => setAi(getAIStatus()));
@@ -482,14 +522,8 @@ export default function OffklassAI() {
     };
   }, []);
 
-  const isReady = ai.aiState === "ready";
-
   const keyboardBehavior = Platform.OS === "ios" ? "padding" : "height";
   const keyboardOffset = Platform.OS === "ios" ? 0 : Math.max(0, insets.top);
-
-  function onFocusInput() {
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
-  }
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -527,7 +561,6 @@ export default function OffklassAI() {
         .slice(-120) as Message[];
 
       setMessages(normalizedMessages);
-
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 120);
     })();
   }, []);
@@ -567,6 +600,50 @@ export default function OffklassAI() {
     }, 160);
   }, [params.question, params.from, params.userAnswer, params.correctAnswer, input]);
 
+  function openTips() {
+    setTipOpen(true);
+    tipFade.setValue(0);
+    tipScale.setValue(0.94);
+
+    Animated.parallel([
+      Animated.timing(tipFade, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(tipScale, {
+        toValue: 1,
+        friction: 8,
+        tension: 48,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }
+
+  function closeTips() {
+    Animated.timing(tipFade, {
+      toValue: 0,
+      duration: 140,
+      useNativeDriver: true,
+    }).start(() => setTipOpen(false));
+  }
+
+  function applyTip(text: string) {
+    setInput((prev) => {
+      const base = prev.trim();
+      return base ? `${base}\n\n${text}` : text;
+    });
+
+    closeTips();
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+    setTimeout(() => inputRef.current?.focus(), 120);
+  }
+
+  function onFocusInput() {
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
+  }
+
   function replaceTypingBubbleWith(text: string, typingId?: string) {
     setMessages((current) =>
       current.map((msg) =>
@@ -583,10 +660,10 @@ export default function OffklassAI() {
 
   async function onSend() {
     const text = input.trim();
-    if (!text || sending) return;
-    if (!isReady) return;
+    if (!text || sending || !isReady) return;
 
     setInput("");
+    setInputHeight(48);
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -615,7 +692,7 @@ export default function OffklassAI() {
           msg.id === typingId ? { ...msg, content: T.stage2 } : msg
         )
       );
-    }, 1000);
+    }, 900);
 
     const stageTimer2 = setTimeout(() => {
       setMessages((m) =>
@@ -623,7 +700,7 @@ export default function OffklassAI() {
           msg.id === typingId ? { ...msg, content: T.stage3 } : msg
         )
       );
-    }, 2200);
+    }, 2000);
 
     try {
       const contextMessages = [...messagesRef.current.slice(-6), userMsg];
@@ -704,25 +781,58 @@ export default function OffklassAI() {
             data={messages}
             keyExtractor={(m) => m.id}
             renderItem={({ item }) => (
-              <View style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
-                <ChatBubble
+              <View style={styles.messageOuter}>
+                <MessageBubble
                   role={item.role === "user" ? "user" : "assistant"}
                   text={item.content}
+                  rtl={rtl}
                 />
               </View>
             )}
             keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
             contentContainerStyle={[
               styles.listContent,
               { paddingBottom: composerH + Math.max(12, insets.bottom) },
               messages.length === 0 && { flex: 1 },
             ]}
+            ListHeaderComponent={
+              messages.length > 0 ? (
+                <View style={styles.welcomeStrip}>
+                  <View style={styles.welcomeChip}>
+                    <Ionicons name="sparkles" size={14} color={UI.purple} />
+                    <Text style={styles.welcomeChipText}>
+                      Offline AI tutor ready for chat
+                    </Text>
+                  </View>
+                </View>
+              ) : null
+            }
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
                 <View style={styles.emptyCard}>
-                  <Ionicons name="school" size={40} color={UI.purple} />
+                  <View style={styles.emptyBadge}>
+                    <Ionicons name="school" size={30} color={UI.purple} />
+                  </View>
                   <Text style={[styles.emptyTitle, rtl]}>{T.startTitle}</Text>
                   <Text style={[styles.emptyHint, rtl]}>{T.startHint}</Text>
+
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.quickChipsRow}
+                  >
+                    {tips.slice(0, 4).map((t) => (
+                      <Pressable
+                        key={t.key}
+                        onPress={() => applyTip(t.text)}
+                        style={styles.quickChip}
+                      >
+                        <Ionicons name={t.icon} size={14} color={UI.purple} />
+                        <Text style={styles.quickChipText}>{t.title}</Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
                 </View>
               </View>
             }
@@ -737,22 +847,39 @@ export default function OffklassAI() {
               { paddingBottom: Math.max(12, insets.bottom) },
             ]}
             onLayout={(e) =>
-              setComposerH(Math.max(76, Math.ceil(e.nativeEvent.layout.height)))
+              setComposerH(Math.max(92, Math.ceil(e.nativeEvent.layout.height)))
             }
           >
+            <View style={styles.composerShadow} />
             <View style={styles.composerCard}>
+              <Pressable
+                onPress={openTips}
+                style={styles.composerIconBtn}
+                hitSlop={8}
+              >
+                <Ionicons name="bulb" size={20} color={UI.purple} />
+              </Pressable>
+
               <TextInput
                 ref={inputRef}
-                style={[styles.input, rtl]}
+                style={[styles.input, rtl, { height: Math.max(48, inputHeight) }]}
                 placeholder={isReady ? T.placeholder : T.preparing}
                 placeholderTextColor={UI.muted}
                 value={input}
                 onChangeText={setInput}
                 onFocus={onFocusInput}
                 multiline
+                textAlignVertical="top"
                 returnKeyType="send"
                 blurOnSubmit={false}
                 editable={isReady}
+                onContentSizeChange={(e) => {
+                  const next = Math.min(
+                    MAX_INPUT_HEIGHT,
+                    Math.max(48, Math.ceil(e.nativeEvent.contentSize.height))
+                  );
+                  setInputHeight(next);
+                }}
                 onSubmitEditing={() => {
                   if (input.trim().length) onSend();
                 }}
@@ -766,13 +893,13 @@ export default function OffklassAI() {
                 disabled={sending || !input.trim() || !isReady}
                 style={[
                   styles.sendBtn,
-                  (sending || !input.trim() || !isReady) && { opacity: 0.5 },
+                  (sending || !input.trim() || !isReady) && styles.sendBtnDisabled,
                 ]}
               >
                 {sending ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Ionicons name="paw" size={20} color="#fff" />
+                  <Ionicons name="arrow-up" size={22} color="#fff" />
                 )}
               </Pressable>
             </View>
@@ -808,11 +935,7 @@ export default function OffklassAI() {
                           {t.text}
                         </Text>
                       </View>
-                      <Ionicons
-                        name="add-circle"
-                        size={22}
-                        color={UI.green}
-                      />
+                      <Ionicons name="add-circle" size={22} color={UI.green} />
                     </Pressable>
                   ))}
                 </View>
@@ -879,25 +1002,30 @@ export default function OffklassAI() {
 const styles = StyleSheet.create({
   blob: { position: "absolute", borderRadius: 999, opacity: 0.55 },
 
-  headerWrap: { padding: 12 },
+  headerWrap: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
   headerCard: {
     backgroundColor: UI.card,
-    borderRadius: 24,
-    padding: 10,
+    borderRadius: 26,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#fff",
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
+    borderWidth: 1,
+    borderColor: UI.border,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F1F5F9",
@@ -907,87 +1035,240 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginTop: 2,
+    marginTop: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "#F8FAFC",
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 999,
     backgroundColor: UI.green,
   },
   subtitle: { fontSize: 11, fontWeight: "800", color: UI.subtext },
 
   tipPill: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F5F3FF",
+    backgroundColor: UI.purpleSoft,
   },
 
-  listContent: { flexGrow: 1, paddingTop: 6 },
+  listContent: {
+    flexGrow: 1,
+    paddingTop: 4,
+  },
+
+  welcomeStrip: {
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  welcomeChip: {
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: UI.chip,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  welcomeChipText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: UI.purple,
+  },
+
+  messageOuter: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+  },
+  messageRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+    width: "100%",
+  },
+  messageRowAssistant: {
+    justifyContent: "flex-start",
+  },
+  messageRowUser: {
+    justifyContent: "flex-end",
+  },
+  avatarAssistant: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: UI.purpleSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  messageBubble: {
+    borderRadius: 24,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    maxWidth: "86%",
+    minWidth: 80,
+    flexShrink: 1,
+  },
+  assistantBubble: {
+    backgroundColor: UI.assistantBubble,
+    borderWidth: 1,
+    borderColor: UI.border,
+    borderBottomLeftRadius: 10,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  userBubble: {
+    backgroundColor: UI.userBubble,
+    borderBottomRightRadius: 10,
+  },
+  bubbleHeader: {
+    marginBottom: 6,
+  },
+  bubbleHeaderText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: UI.purple,
+    letterSpacing: 0.2,
+  },
+  messageTextWrap: {
+    flexShrink: 1,
+    width: "100%",
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: "700",
+    flexShrink: 1,
+  },
+  messageTextBullet: {
+    paddingLeft: 2,
+  },
+  messageLineSpacing: {
+    marginBottom: 3,
+  },
 
   emptyWrap: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 90,
     paddingHorizontal: 16,
+    paddingTop: 50,
   },
   emptyCard: {
-    backgroundColor: UI.card,
-    padding: 28,
+    backgroundColor: UI.cardStrong,
+    paddingHorizontal: 24,
+    paddingTop: 26,
+    paddingBottom: 22,
     borderRadius: 30,
     alignItems: "center",
-    width: "90%",
-    borderWidth: 2,
-    borderColor: "#fff",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 8 },
+    width: "92%",
+    borderWidth: 1,
+    borderColor: UI.border,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+  },
+  emptyBadge: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: UI.purpleSoft,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: "900",
     color: UI.text,
-    marginTop: 10,
+    marginTop: 12,
   },
   emptyHint: {
     fontSize: 14,
     color: UI.subtext,
     textAlign: "center",
-    marginTop: 6,
-    lineHeight: 20,
+    marginTop: 8,
+    lineHeight: 21,
     fontWeight: "700",
   },
-
-  composerOuter: { paddingHorizontal: 16, backgroundColor: "transparent" },
-  composerCard: {
+  quickChipsRow: {
+    paddingTop: 18,
+    gap: 10,
+  },
+  quickChip: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 8,
-    backgroundColor: UI.card,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: "#fff",
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
+    gap: 6,
+    backgroundColor: UI.chip,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+  },
+  quickChipText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: UI.purple,
+  },
+
+  composerOuter: {
+    paddingHorizontal: 12,
+    backgroundColor: "transparent",
+  },
+  composerShadow: {
+    position: "absolute",
+    left: 18,
+    right: 18,
+    bottom: 8,
+    height: 24,
+    borderRadius: 20,
+    backgroundColor: "rgba(109,40,217,0.08)",
+  },
+  composerCard: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    padding: 10,
+    backgroundColor: UI.cardStrong,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: UI.border,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
     gap: 10,
+  },
+  composerIconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: UI.purpleSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 3,
   },
   input: {
     flex: 1,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    minHeight: 48,
+    maxHeight: MAX_INPUT_HEIGHT,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
     fontSize: 16,
+    lineHeight: 22,
     fontWeight: "700",
     color: UI.text,
-    maxHeight: 110,
     backgroundColor: UI.inputBg,
     borderRadius: 22,
     borderWidth: 1,
@@ -1000,6 +1281,10 @@ const styles = StyleSheet.create({
     backgroundColor: UI.purple,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 3,
+  },
+  sendBtnDisabled: {
+    opacity: 0.5,
   },
 
   tipBackdrop: {
@@ -1013,6 +1298,10 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     padding: 22,
     elevation: 20,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
   },
   tipTitle: { fontSize: 18, fontWeight: "900", color: UI.text },
   tipSub: {
@@ -1021,7 +1310,6 @@ const styles = StyleSheet.create({
     color: UI.subtext,
     marginTop: 4,
   },
-
   tipRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1043,7 +1331,7 @@ const styles = StyleSheet.create({
 
   aiGate: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(240,247,255,0.75)",
+    backgroundColor: "rgba(245,248,255,0.76)",
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
@@ -1054,13 +1342,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.98)",
     borderRadius: 28,
     padding: 20,
-    borderWidth: 2,
-    borderColor: "#fff",
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
+    borderWidth: 1,
+    borderColor: UI.border,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
     alignItems: "center",
     gap: 10,
   },
@@ -1075,6 +1363,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: UI.subtext,
     textAlign: "center",
+    lineHeight: 18,
   },
   retryBtn: {
     marginTop: 8,
@@ -1082,9 +1371,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     backgroundColor: UI.purple,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 16,
+    borderRadius: 999,
   },
-  retryText: { color: "#fff", fontWeight: "900" },
-});
+  retryText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 14,
+  },
+}); 

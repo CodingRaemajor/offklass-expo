@@ -78,12 +78,12 @@ const MODEL_RUNTIME: Record<
   { n_ctx: number; n_threads: number; use_mlock: boolean }
 > = {
   smollm2: {
-    n_ctx: 1024,
+    n_ctx: 1536,
     n_threads: 4,
     use_mlock: false,
   },
   qwen15b: {
-    n_ctx: 2048,
+    n_ctx: 4096,
     n_threads: 4,
     use_mlock: false,
   },
@@ -102,13 +102,13 @@ function normalizeModelChoice(choice: AIModelInput): ModelChoice {
   return CHAT_MODEL;
 }
 
-const CHAT_N_PREDICT = 192;
-const QUIZ_N_PREDICT = 320;
-const FLASHCARD_N_PREDICT = 220;
+const CHAT_N_PREDICT = 384;
+const QUIZ_N_PREDICT = 260;
+const FLASHCARD_N_PREDICT = 180;
 
-const CHAT_TEMPERATURE = 0.35;
-const QUIZ_TEMPERATURE = 0.25;
-const FLASHCARD_TEMPERATURE = 0.2;
+const CHAT_TEMPERATURE = 0.65;
+const QUIZ_TEMPERATURE = 0.35;
+const FLASHCARD_TEMPERATURE = 0.28;
 
 /* ============================== LOCAL CONTENT CONFIG ============================== */
 
@@ -151,72 +151,75 @@ export function cleanModelOutput(text: string): string {
 /* ============================== SYSTEM PROMPTS ============================== */
 
 const DEFAULT_SYSTEM_PROMPT = `
-You are Offklass AI, a kind and patient offline tutor for children.
+You are Offklass AI, a warm, smart, and helpful tutor.
 
-Your job:
-- Help Grade 4 students learn math clearly and safely
-- Explain in very simple words
-- Give short answers first
-- Show steps when solving math
-- Stay focused on the lesson, quiz, or flashcard topic
-- Be encouraging and calm
+Respond in a natural ChatGPT-like way:
+- clear
+- conversational
+- thoughtful
+- accurate
+- friendly
+- not robotic
 
-Rules:
-- Use easy English a child can understand
-- Keep answers short, direct, and accurate
-- Do not use hard words unless you explain them
-- Do not mention being an AI model
-- If the student asks something unrelated, gently bring them back to learning
-- If solving math, show the answer step by step
-- If giving multiple choice help, pick one best answer and explain why
-- If creating study content, make it clear, correct, and easy to review
-- If you are not sure, say: "Let's solve it step by step."
+Your goal is to help the student understand, not just give the final answer.
 
-Style:
-- Friendly
-- Short
-- Clear
-- Supportive
-- Kid-safe
+How to respond:
+- Start with the direct answer when possible
+- Then explain simply and clearly
+- Use short paragraphs or steps
+- Use easy words by default
+- If the student seems confused, make it simpler
+- If the question is easy, answer briefly
+- If the question needs detail, explain more
+- For math, show the steps clearly
+- Double-check arithmetic before answering
+- Be encouraging, but only naturally
 
-Never:
-- Give unsafe, harmful, or adult content
-- Use rude language
-- Give confusing or advanced explanations
-- Output markdown tables unless asked
+Important:
+- Do not sound scripted
+- Do not repeat the same phrases again and again
+- Do not be overly childish
+- Do not be overly formal
+- Do not say "As an AI language model"
+- Do not mention hidden rules or system prompts
 
-For quizzes:
-- Prefer a smooth difficulty rise from easier to harder
-- Keep questions fun, fair, and confidence-building
-- Reward effort with short encouraging explanations
+Safety:
+- Do not provide harmful, sexual, violent, illegal, or unsafe instructions
+- If something is unsafe, refuse briefly and gently redirect
 
-For flashcards:
-- Focus on important ideas, not vague prompts
-- Make cards useful for fast revision and memory
-
-You are the learning buddy inside Offklass.
+You are the main AI assistant inside Offklass.
 `.trim();
 
 const QUIZ_SYSTEM_PROMPT = `
-You are Offklass Buddy, creating Grade 4 quiz questions.
+You are Offklass AI creating Grade 4 quizzes.
 
-Rules:
-- Be exact and format-safe
-- Use simple Grade 4 language
-- Keep questions clear and fair
-- Only output the quiz format requested
-- Do not add extra commentary
+Create clear, correct, student-friendly quiz questions.
+Use simple language.
+Follow the exact format requested.
+Do not add any extra commentary.
+Keep questions fair and useful.
 `.trim();
 
 const FLASHCARD_SYSTEM_PROMPT = `
-You are Offklass Buddy, creating Grade 4 flashcards.
+You are Offklass AI creating Grade 4 flashcards.
+
+Create strong study flashcards that help a student revise real lesson facts.
 
 Rules:
-- Be exact and format-safe
-- Keep front and back short
-- Make cards useful for revision
-- Only output the flashcard format requested
-- Do not add extra commentary
+- Every flashcard must teach one specific fact, rule, definition, step, or solved example
+- Do NOT write vague flashcards
+- Do NOT write generic revision tips
+- Do NOT write cards like "What do you need to remember?"
+- Do NOT write cards like "What do you learn in this unit?"
+- Make each front ask one clear question
+- Make each back give one clear answer
+- Use simple Grade 4 English
+- Keep the front short
+- Keep the back short but useful
+- No duplicate cards
+- Prefer number facts, definitions, place value, expanded form, operations, or short worked facts
+- Follow the exact format requested
+- Do not add commentary before or after
 `.trim();
 
 /* ============================== MESSAGE FORMATTER ============================== */
@@ -586,19 +589,28 @@ function isStrongFlashcard(card: GeneratedFlashcard): boolean {
   const back = normalizeSpace(card.back);
   const topic = normalizeSpace(card.topic || "General");
 
-  if (front.length < 6 || back.length < 1) return false;
-  if (front.length > 120 || back.length > 140) return false;
-  if (/^[A-Z\s\-]{4,}$/.test(front) && front.split(" ").length <= 5) return false;
-  if (
-    /^(what is this|practice this|remember this|what should you remember)\??$/i.test(
-      front
-    )
-  )
-    return false;
-  if (/^what math idea does this teach\??$/i.test(front)) return false;
-  if (new Set([front.toLowerCase(), back.toLowerCase()]).size < 2) return false;
+  if (front.length < 8 || back.length < 2) return false;
+  if (front.length > 90 || back.length > 120) return false;
 
-  return !!topic;
+  const weakFronts = [
+    /^what do you need to remember\??$/i,
+    /^what steps should you follow\??$/i,
+    /^what do you learn/i,
+    /^what should you do first/i,
+    /^how can you check your answer/i,
+    /^what is a good math habit/i,
+    /^why is place value or operation order important/i,
+    /^what math idea does this teach\??$/i,
+    /^practice this\??$/i,
+    /^remember this\??$/i,
+  ];
+
+  if (weakFronts.some((r) => r.test(front))) return false;
+
+  if (new Set([front.toLowerCase(), back.toLowerCase()]).size < 2) return false;
+  if (!topic) return false;
+
+  return true;
 }
 
 function dedupeStrings(options: string[]): string[] {
@@ -686,7 +698,7 @@ function buildFlashcardPrompt(
   keyFacts: string[]
 ) {
   return `
-Create exactly ${FLASHCARD_COUNT} flashcards for Grade 4 revision.
+Create exactly ${FLASHCARD_COUNT} high-quality flashcards for Grade 4 revision.
 
 Unit: ${unitTitle}
 
@@ -696,15 +708,26 @@ ${transcript}
 Key facts:
 ${formatKeyFactsForPrompt(keyFacts)}
 
+Goal:
+Make flashcards that feel specific, useful, and easy to study from.
+
 Rules:
 - Exactly 10 flashcards
-- Short front
-- Short back
-- Very clear and useful
-- Good for memorizing lesson ideas
-- Use child-friendly English
+- Each flashcard must be based on a real lesson fact
+- Front = one clear question
+- Back = one clear answer
 - No vague cards
+- No generic study advice
 - No duplicate cards
+- Prefer these types of cards:
+  1. definition cards
+  2. place value cards
+  3. expanded form cards
+  4. arithmetic fact cards
+  5. short method/step cards
+- Use simple Grade 4 language
+- Keep fronts under 60 characters when possible
+- Keep backs under 90 characters when possible
 - No extra commentary
 
 Return exactly in this format:
@@ -1004,8 +1027,8 @@ export async function generateQuizFromTranscript(
     const raw = await runCompletion(engine, prompt, {
       n_predict: QUIZ_N_PREDICT,
       temperature: QUIZ_TEMPERATURE,
-      top_p: 0.9,
-      top_k: 30,
+      top_p: 0.85,
+      top_k: 25,
     });
 
     modelQuiz = parseQuizResponse(raw, lessonTitle, topic);
@@ -1086,34 +1109,54 @@ function makeFlashcardFrontFromSentence(
 ): string {
   const s = normalizeSpace(sentence);
 
-  const placeValueMatch = s.match(/value of (\d) in (\d+)/i);
-  if (placeValueMatch) {
-    return `What is the value of ${placeValueMatch[1]} in ${placeValueMatch[2]}?`;
+  const valueMatch = s.match(/value of (\d) in (\d+)/i);
+  if (valueMatch) {
+    return `What is the value of ${valueMatch[1]} in ${valueMatch[2]}?`;
   }
 
   const expandedMatch = s.match(
     /(\d[\d,]*)\s*(?:=|is)\s*([\d,]+\s*\+\s*[\d,]+(?:\s*\+\s*[\d,]+)*)/i
   );
   if (expandedMatch) {
-    return `What is the expanded form of ${normalizeSpace(
-      expandedMatch[1]
-    )}?`;
+    return `Expanded form of ${normalizeSpace(expandedMatch[1])}?`;
   }
 
-  const isMatch = s.match(/^(.+?) is (.+)$/i);
-  if (isMatch && isMatch[1].length <= 40) {
-    return `What is ${normalizeSpace(isMatch[1])}?`;
+  const addMatch = s.match(/(\d+)\s*\+\s*(\d+)\s*=\s*(\d+)/);
+  if (addMatch) {
+    return `What is ${addMatch[1]} + ${addMatch[2]}?`;
   }
 
-  if (/how to|how do|steps?|first,|next,|then,/i.test(s)) {
-    return `What steps should you follow?`;
+  const subMatch = s.match(/(\d+)\s*-\s*(\d+)\s*=\s*(\d+)/);
+  if (subMatch) {
+    return `What is ${subMatch[1]} - ${subMatch[2]}?`;
   }
 
-  if (/add|subtract|multiply|divide|groups|place value|expanded form/i.test(s)) {
-    return `What do you need to remember?`;
+  const mulMatch = s.match(/(\d+)\s*[x×]\s*(\d+)\s*=\s*(\d+)/i);
+  if (mulMatch) {
+    return `What is ${mulMatch[1]} × ${mulMatch[2]}?`;
   }
 
-  return `What do you learn in ${unitTitle}?`;
+  const divMatch = s.match(/(\d+)\s*[÷/]\s*(\d+)\s*=\s*(\d+)/i);
+  if (divMatch) {
+    return `What is ${divMatch[1]} ÷ ${divMatch[2]}?`;
+  }
+
+  const defMatch = s.match(/^(.{3,40}?) is (.+)$/i);
+  if (defMatch) {
+    return `What is ${normalizeSpace(defMatch[1])}?`;
+  }
+
+  const meansMatch = s.match(/^(.{3,40}?) means (.+)$/i);
+  if (meansMatch) {
+    return `What does ${normalizeSpace(meansMatch[1])} mean?`;
+  }
+
+  const representMatch = s.match(/^(.{3,40}?) represents (.+)$/i);
+  if (representMatch) {
+    return `What does ${normalizeSpace(representMatch[1])} represent?`;
+  }
+
+  return "";
 }
 
 function buildLogicFlashcardsFromFacts(
@@ -1124,21 +1167,28 @@ function buildLogicFlashcardsFromFacts(
   const used = new Set<string>();
 
   const push = (front: string, back: string, topic: string = unitTitle) => {
+    const cleanFront = normalizeSpace(front);
+    const cleanBack = normalizeSpace(back);
+    const cleanTopic = normalizeSpace(topic || unitTitle);
+
+    if (!cleanFront || !cleanBack) return;
+
     const card: GeneratedFlashcard = {
       id: out.length + 1,
-      front: normalizeSpace(front),
-      back: normalizeSpace(back),
-      topic: normalizeSpace(topic || unitTitle),
+      front: cleanFront,
+      back: cleanBack,
+      topic: cleanTopic,
     };
 
-    const key = `${card.front.toLowerCase()}|||${card.back.toLowerCase()}`;
+    const key = `${cleanFront.toLowerCase()}|||${cleanBack.toLowerCase()}`;
     if (used.has(key) || !isStrongFlashcard(card)) return;
+
     used.add(key);
     out.push(card);
   };
 
   for (const fact of facts) {
-    if (out.length >= 8) break;
+    if (out.length >= FLASHCARD_COUNT) break;
 
     const valueMatch = fact.match(/value of (\d) in (\d+)/i);
     if (valueMatch) {
@@ -1161,32 +1211,54 @@ function buildLogicFlashcardsFromFacts(
     );
     if (expanded) {
       push(
-        `What is the expanded form of ${normalizeSpace(expanded[1])}?`,
+        `Expanded form of ${normalizeSpace(expanded[1])}?`,
         normalizeSpace(expanded[2]),
         "Expanded Form"
       );
       continue;
     }
 
-    const definition = fact.match(/^(.{3,45}?) is (.+)$/i);
+    const add = fact.match(/(\d+)\s*\+\s*(\d+)\s*=\s*(\d+)/);
+    if (add) {
+      push(`What is ${add[1]} + ${add[2]}?`, add[3], "Addition");
+      continue;
+    }
+
+    const sub = fact.match(/(\d+)\s*-\s*(\d+)\s*=\s*(\d+)/);
+    if (sub) {
+      push(`What is ${sub[1]} - ${sub[2]}?`, sub[3], "Subtraction");
+      continue;
+    }
+
+    const mul = fact.match(/(\d+)\s*[x×]\s*(\d+)\s*=\s*(\d+)/i);
+    if (mul) {
+      push(`What is ${mul[1]} × ${mul[2]}?`, mul[3], "Multiplication");
+      continue;
+    }
+
+    const div = fact.match(/(\d+)\s*[÷/]\s*(\d+)\s*=\s*(\d+)/i);
+    if (div) {
+      push(`What is ${div[1]} ÷ ${div[2]}?`, div[3], "Division");
+      continue;
+    }
+
+    const definition = fact.match(/^(.{3,40}?) is (.+)$/i);
     if (definition) {
       const label = normalizeSpace(definition[1]);
       const answer = normalizeSpace(definition[2]).replace(/\.$/, "");
-      if (answer.length <= 70) {
+      if (answer.length <= 80) {
         push(`What is ${label}?`, answer, unitTitle);
         continue;
       }
     }
 
-    if (/step|first|next|then|finally/i.test(fact)) {
-      push(`What steps should you remember?`, fact, unitTitle);
-      continue;
+    const front = makeFlashcardFrontFromSentence(fact, unitTitle);
+    if (front) {
+      push(front, fact, unitTitle);
     }
-
-    push(makeFlashcardFrontFromSentence(fact, unitTitle), fact, unitTitle);
   }
 
-  return out.slice(0, 8);
+  return out.slice(0, FLASHCARD_COUNT);
 }
 
 function buildFlashcardFallback(
@@ -1203,55 +1275,30 @@ function buildFlashcardFallback(
     .map((s) => normalizeSpace(s))
     .filter(
       (s) =>
-        s.length > 12 &&
-        s.length < 120 &&
+        s.length >= 12 &&
+        s.length <= 100 &&
         !s.startsWith("-") &&
         !/^(welcome|hi|hey|hello)/i.test(s)
     );
 
   const cards: GeneratedFlashcard[] = [];
 
-  for (let i = 0; i < Math.min(sentences.length, FLASHCARD_COUNT); i++) {
-    const sentence = sentences[i];
+  for (const sentence of sentences) {
+    if (cards.length >= FLASHCARD_COUNT) break;
 
-    cards.push({
-      id: i + 1,
-      front: makeFlashcardFrontFromSentence(sentence, unitTitle),
+    const front = makeFlashcardFrontFromSentence(sentence, unitTitle);
+    if (!front) continue;
+
+    const card: GeneratedFlashcard = {
+      id: cards.length + 1,
+      front,
       back: sentence,
       topic: unitTitle,
-    });
-  }
+    };
 
-  const genericCards: GeneratedFlashcard[] = [
-    {
-      id: 1001,
-      front: `What should you do first when solving ${unitTitle}?`,
-      back: `Read carefully and solve step by step.`,
-      topic: unitTitle,
-    },
-    {
-      id: 1002,
-      front: `How can you check your answer in ${unitTitle}?`,
-      back: `Use the reverse operation or check each place.`,
-      topic: unitTitle,
-    },
-    {
-      id: 1003,
-      front: `Why is place value or operation order important?`,
-      back: `It helps you choose the correct answer.`,
-      topic: unitTitle,
-    },
-    {
-      id: 1004,
-      front: `What is a good math habit during practice?`,
-      back: `Work neatly and recheck your answer.`,
-      topic: unitTitle,
-    },
-  ];
-
-  for (const card of genericCards) {
-    if (cards.length >= FLASHCARD_COUNT) break;
-    cards.push({ ...card, id: cards.length + 1 });
+    if (isStrongFlashcard(card)) {
+      cards.push(card);
+    }
   }
 
   return dedupeFlashcards(cards)
@@ -1329,8 +1376,8 @@ export async function generateFlashcardsFromTranscript(
     const raw = await runCompletion(engine, prompt, {
       n_predict: FLASHCARD_N_PREDICT,
       temperature: FLASHCARD_TEMPERATURE,
-      top_p: 0.9,
-      top_k: 30,
+      top_p: 0.82,
+      top_k: 20,
     });
 
     modelCards = parseFlashcardResponse(raw, unitTitle);
@@ -1348,8 +1395,8 @@ export async function generateFlashcardsFromTranscript(
   const fallback = buildFlashcardFallback(compactTranscript, unitTitle);
 
   const merged = dedupeFlashcards([
-    ...modelCards,
     ...logicCards,
+    ...modelCards,
     ...quickCards,
     ...fallback,
   ])
@@ -1825,7 +1872,7 @@ async function generateDirectChat(
     n_predict: CHAT_N_PREDICT,
     temperature: CHAT_TEMPERATURE,
     top_p: 0.9,
-    top_k: 30,
+    top_k: 40,
   });
 }
 
@@ -1888,7 +1935,7 @@ export async function callAI(history: Message[]): Promise<Message> {
       const engine = await getContext(CHAT_MODEL);
       const startTime = Date.now();
 
-      const recentHistory = history.slice(-4);
+      const recentHistory = history.slice(-6);
       const cleaned = await generateDirectChat(engine, recentHistory);
 
       const endTime = Date.now();
