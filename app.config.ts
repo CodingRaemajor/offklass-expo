@@ -26,7 +26,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
   },
   android: {
-    package: "com.parthpatel2005.offklassexpo",
+    package: "Offklass",
     adaptiveIcon: {
       foregroundImage: "./assets/icon.png",
       backgroundColor: "#5A52E0",
